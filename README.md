@@ -45,6 +45,24 @@ npm run build      # o: node tools/build.js
 El build escribe **las dos copias idénticas** en una sola pasada (así nunca se
 desincronizan) y aborta si algún fragmento contiene `</script>`/`</style>`.
 
+## Interfaz "Carta Gantt MP" (gantt.html)
+
+Presentación alternativa **sobre el mismo motor** (`src/hhha-core.js`): la matriz
+anual de MP por equipo (familia × 12 meses) con KPIs, filtros y panel lateral.
+Usa los datos reales (estado recalculado, `prog`/`registro`) y expone las
+funciones del programa: clic en una celda **registra/corrige la MP** (Si/C1–C8/
+FS/NU/Baja) con recálculo de estado; el panel del equipo da acceso a bitácora
+(oficializar/anular), pendientes, ciclos, baja, encargado, notas y gestión.
+
+Fuentes editables: `ui/gantt.css` y `ui/gantt-app.js` (dev: `ui/gantt.html`).
+Comparte el `localStorage` con `app.html` (mismo estado).
+
+```bash
+npm run build:gantt   # genera gantt.html (archivo único, offline)
+npm run test:gantt    # smoke test headless (jsdom)
+npm run build:all     # genera app.html + gantt.html
+```
+
 ## Despliegue (Google Sheets · opcional)
 
 La app funciona sola en el navegador. Para guardar los datos en un Google Sheet
