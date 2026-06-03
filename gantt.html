@@ -2333,6 +2333,26 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function stOf(e) { return STMAP[e.estado] || STMAP.desconocido; }
   function stLabel(e) { return ESTADO_LABEL[e.estado] || 'Desconocido'; }
 
+  // campos por tipo de evento (réplica del formulario clásico ui/app.js)
+  var EV_SPEC = {
+    'Solicitud de trabajo': { obs: 'Descripción de la falla', notice: 'Abre un ciclo correctivo y deja el equipo "no operativo".', fields: [['ejecutor', 'Ejecutor', 'ejec'], ['folio', 'N° Informe / Folio', 'text']] },
+    'Visita técnica': { obs: 'Informe', fields: [['empresa', 'Empresa', 'text'], ['tecnico', 'Técnico', 'text'], ['tipoVisita', 'Tipo visita', ['diagnóstica:Diagnóstica', 'correctiva:Correctiva']], ['folio', 'N° Informe / Folio', 'text'], ['estado', 'Estado', ['no operativo:No operativo', 'operativo:Operativo', 'en servicio técnico:En servicio técnico']]] },
+    'Orden de Compra': { fields: [['nCotiz', 'N° Cotización', 'text'], ['nOC', 'N° OC', 'text'], ['empresa', 'Empresa', 'text'], ['via', 'Vía', ['trato_directo:Trato directo', 'compra_agil:Compra ágil']], ['folioInformeTD', 'Folio informe (TD)', 'text'], ['folio', 'N° Informe / Folio', 'text']] },
+    'Envío a servicio técnico': { notice: 'El equipo queda "en servicio técnico".', fields: [['empresa', 'Empresa ST', 'text'], ['nEnvio', 'N° Envío', 'text'], ['ejecutor', 'Ejecutor', 'ejec'], ['folio', 'N° Informe / Folio', 'text']] },
+    'Recepción': { fields: [['nEnvio', 'N° envío original', 'text'], ['folioGuia', 'Folio guía despacho', 'text'], ['folio', 'N° Informe / Folio', 'text'], ['estado', 'Estado', ['operativo:Operativo (cierra ciclo)', 'no operativo:No operativo', 'en servicio técnico:En servicio técnico']]] },
+    'Reparación': { fields: [['folio', 'N° Informe / Folio', 'text'], ['estado', 'Estado', ['operativo:Operativo (cierra ciclo)', 'no operativo:No operativo', 'en servicio técnico:En servicio técnico']], ['repuestos', 'Repuestos', 'text']] },
+    'Mantención preventiva': { obs: 'Observación', notice: 'C1–C8 → pendiente de reprogramación · NU → "Localizar equipo" · Baja → equipo a baja.', fields: [['resultado', 'Resultado', RES_MP], ['mpEstadoSi', 'Estado (si "Si")', ['operativo:Operativo', 'no operativo:No operativo']], ['ejecutor', 'Ejecutor', 'ejec'], ['ejecutor2', 'Ejecutor 2', 'ejec']] }
+  };
+  // campos extra editables al EDITAR un evento existente (no tocan estado/resultado)
+  var EXTRA_FIELDS = {
+    'Solicitud de trabajo': [['folio', 'N° Informe / Folio']],
+    'Visita técnica': [['empresa', 'Empresa'], ['tecnico', 'Técnico'], ['folio', 'N° Informe / Folio']],
+    'Orden de Compra': [['nCotiz', 'N° Cotización'], ['nOC', 'N° OC'], ['empresa', 'Empresa'], ['folioInformeTD', 'Folio informe (TD)'], ['folio', 'N° Informe / Folio']],
+    'Envío a servicio técnico': [['empresa', 'Empresa ST'], ['nEnvio', 'N° Envío'], ['folio', 'N° Informe / Folio']],
+    'Recepción': [['nEnvio', 'N° envío original'], ['folioGuia', 'Folio guía despacho'], ['folio', 'N° Informe / Folio']],
+    'Reparación': [['repuestos', 'Repuestos'], ['folio', 'N° Informe / Folio']]
+  };
+
   /* ----------------------------- utilidades ----------------------------- */
   function esc(s) { return (s == null ? '' : String(s)).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
   function norm(s) { return (s == null ? '' : String(s)).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
@@ -2491,7 +2511,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var evHtml = evs.length ? evs.slice(0, 40).map(function (ev) {
       var badge = ev.tipo === 'Mantención preventiva' ? (ev.oficial === 'Sí' ? '<span class="tag-ofic">oficial</span>' : '<span class="tag-borr">borrador</span>') : '';
       var bits = []; if (ev.resultado) bits.push(ev.resultado); if (ev.estado) bits.push(ESTADO_LABEL[normEstado(ev.estado)] || ev.estado); if (ev.ejecutor) bits.push(ev.ejecutor); if (ev.folio) bits.push('Folio ' + ev.folio);
-      var acts = '';
+      var acts = '<button class="mini" data-act="edit-ev" data-id="' + ev.id + '">Editar</button>';
       if (ev.tipo === 'Mantención preventiva' && ev.oficial !== 'Sí') acts += '<button class="mini" data-act="oficializar" data-id="' + ev.id + '">Oficializar</button>';
       acts += '<button class="mini danger" data-act="anular" data-id="' + ev.id + '">Anular</button>';
       return '<div class="tl-item"><div class="tl-when">' + fmt(ev.fecha) + '</div><div class="tl-main"><div class="tl-t">' + esc(ev.tipo) + ' ' + badge + '</div><div class="tl-s">' + esc(bits.join(' · ')) + (ev.obs ? ' — ' + esc(ev.obs) : '') + '</div></div><div class="tl-acts">' + acts + '</div></div>';
@@ -2590,6 +2610,15 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         if (!window.confirm('¿Anular este evento? Se revertirán sus efectos (estado, R del mes, ciclos y pendientes automáticos).')) return;
         var motivo2 = window.prompt('Motivo de anulación:', 'Mal ingresado') || 'Anulado'; var r2 = H.anularEvento(ev2, motivo2); toast(r2.ok ? 'Evento anulado' : (r2.error || 'No se pudo'), r2.ok ? '' : 'warn'); return;
       }
+      if (act === 'edit-ev') {
+        var ev3 = findEv(id); if (!ev3) return;
+        if (ev3.tipo === 'Mantención preventiva') {
+          var dt = new Date((ev3.fecha || '') + 'T00:00:00');
+          if (!isNaN(dt)) { YEAR = dt.getFullYear(); el('#yearLab').textContent = YEAR; var ys = el('#fYear'); if (ys) ys.value = YEAR; paintMP(e, dt.getMonth(), function () { paintEquipo(H.findEquipo(e.inv) || e); }); }
+          else paintEditarEvento(e, ev3);
+        } else paintEditarEvento(e, ev3);
+        return;
+      }
       if (act === 'pend-avanzar') { var p1 = findPend(id); if (p1) H.cambiarEstadoPend(p1, p1.estado === 'no_iniciado' ? 'en_proceso' : 'cerrado'); return; }
       if (act === 'pend-cerrar') { var p2 = findPend(id); if (p2) H.cerrarPendiente(p2, ''); return; }
       if (act === 'pend-reabrir') { var p3 = findPend(id); if (p3) H.cambiarEstadoPend(p3, 'en_proceso'); return; }
@@ -2648,23 +2677,64 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     };
   }
 
-  // ---- sub-formulario: nuevo evento ----
-  function paintEvento(e) {
-    drawerMode = 'evento';
-    subForm(e, 'Nuevo evento',
-      '<div class="fld"><label>Tipo</label><select id="eTipo">' + opt(TIPOS_EV, 'Solicitud de trabajo') + '</select></div>' +
-      '<div class="grid-2"><div class="fld"><label>Fecha</label><input type="date" id="eFecha" value="' + esc(H.hoyLocal()) + '"></div>' +
-        '<div class="fld"><label>Ejecutor</label><select id="eEjec">' + opt([['', '—']].concat(EJEC.map(function (x) { return [x, x]; })), '') + '</select></div></div>' +
-      '<div class="fld"><label>N° Folio / Informe (opcional)</label><input id="eFolio" placeholder="folio, OC, cotización…"></div>' +
-      '<div class="fld"><label>Observación</label><textarea id="eObs" placeholder="Detalle del evento…"></textarea></div>' +
-      '<div class="notice">Los efectos se aplican según el tipo: Solicitud abre ciclo y deja el equipo no operativo; Reparación/Recepción operativa cierra el ciclo; etc.</div>',
-      function () {
-        var d = { inv: e.inv, tipo: el('#eTipo').value, fecha: el('#eFecha').value, ejecutor: el('#eEjec').value, folio: el('#eFolio').value, obs: el('#eObs').value };
-        var r = H.crearEvento(d);
-        if (!r.ok && r.requiereConfirmacion) { if (window.confirm(r.aviso)) r = H.crearEvento(Object.assign({}, d, { forzarSinProg: true })); else return; }
-        if (!r.ok) return toast(r.error || 'No se pudo crear', 'warn');
-        toast('Evento creado · ' + d.tipo); paintEquipo(H.findEquipo(e.inv) || e);
+  // ---- sub-formulario: nuevo evento (campos por tipo, como en la app clásica) ----
+  function paintEvento(e, opts) {
+    opts = opts || {}; drawerMode = 'evento';
+    var tipo = opts.tipo || 'Solicitud de trabajo';
+    function fieldsFor(tp) {
+      var spec = EV_SPEC[tp] || { fields: [] };
+      var html = fld('Fecha', '<input type="date" id="ev_fecha" value="' + esc(opts.fecha || H.hoyLocal()) + '">');
+      spec.fields.forEach(function (f) {
+        var key = f[0], lab = f[1], ty = f[2], id = 'ev_' + key;
+        if (ty === 'ejec') html += fld(lab, ejecSel(id, ''));
+        else if (Array.isArray(ty) && typeof ty[0] === 'string' && ty[0].indexOf(':') >= 0) html += fld(lab, '<select id="' + id + '">' + ty.map(function (o) { var p = o.split(':'); return '<option value="' + esc(p[0]) + '">' + esc(p[1] || p[0]) + '</option>'; }).join('') + '</select>');
+        else if (Array.isArray(ty)) html += fld(lab, '<select id="' + id + '">' + opt(ty, '') + '</select>');
+        else html += fld(lab, '<input type="text" id="' + id + '">');
       });
+      html += fld(spec.obs || 'Observación', '<textarea id="ev_obs"></textarea>');
+      html += fld('Oficial', '<select id="ev_oficial">' + opt([['No', 'Borrador'], ['Sí', 'Oficial']], 'No') + '</select>');
+      if (spec.notice) html += '<div class="notice info">' + esc(spec.notice) + '</div>';
+      return html;
+    }
+    function save() {
+      var d = { inv: e.inv, tipo: tipo, fecha: el('#ev_fecha').value, obs: el('#ev_obs').value, oficial: el('#ev_oficial').value };
+      (EV_SPEC[tipo] || { fields: [] }).fields.forEach(function (f) { var n = el('#ev_' + f[0]); if (!n) return; if (f[0] === 'mpEstadoSi') d.mpEstadoSi = n.value; else d[f[0]] = n.value; });
+      var r = H.crearEvento(d);
+      if (!r.ok && r.requiereConfirmacion) { if (window.confirm(r.aviso)) r = H.crearEvento(Object.assign({}, d, { forzarSinProg: true })); else return; }
+      if (!r.ok) return toast(r.error || 'No se pudo crear', 'warn');
+      toast(r.consolidado ? 'MP del mes actualizada' : 'Evento "' + tipo + '" registrado'); paintEquipo(H.findEquipo(e.inv) || e);
+    }
+    function renderForm() {
+      drawer.innerHTML = head(e, 'Nuevo evento') +
+        '<div class="d-body"><button class="dback" data-back>← Volver al equipo</button>' +
+        fld('Tipo de evento', '<select id="evTipo">' + opt(TIPOS_EV, tipo) + '</select>') +
+        '<div id="evFields">' + fieldsFor(tipo) + '</div></div>' + foot('Guardar evento');
+      wireBack(e);
+      el('#evTipo').onchange = function (ev) { tipo = ev.target.value; el('#evFields').innerHTML = fieldsFor(tipo); };
+      drawer.querySelector('[data-save]').onclick = save;
+    }
+    renderForm();
+  }
+
+  // ---- sub-formulario: editar evento (datos no críticos; resultado MP se corrige en el calendario) ----
+  function paintEditarEvento(e, ev) {
+    drawerMode = 'editev';
+    var extra = EXTRA_FIELDS[ev.tipo] || [];
+    drawer.innerHTML = head(e, 'Editar evento') +
+      '<div class="d-body"><button class="dback" data-back>← Volver al equipo</button>' +
+      '<div class="notice">' + esc(ev.tipo) + (ev.resultado ? ' · ' + esc(ev.resultado) : '') + (ev.estado ? ' · ' + esc(ev.estado) : '') + '</div>' +
+      '<div class="grid-2">' + fld('Fecha', '<input type="date" id="ed_fecha" value="' + esc(ev.fecha || '') + '">') + fld('Ejecutor', ejecSel('ed_ejec', ev.ejecutor || '')) + '</div>' +
+      fld('Oficial', '<select id="ed_oficial">' + opt([['No', 'Borrador'], ['Sí', 'Oficial']], ev.oficial || 'No') + '</select>') +
+      extra.map(function (f) { return fld(f[1], '<input type="text" id="ed_' + f[0] + '" value="' + esc(ev[f[0]] || '') + '">'); }).join('') +
+      fld('Observación', '<textarea id="ed_obs">' + esc(ev.obs || '') + '</textarea>') +
+      (ev.tipo === 'Mantención preventiva' ? '<div class="notice info">Para cambiar el resultado de una MP (p. ej. C6 → C3) usa el calendario; aquí editas datos no críticos.</div>' : '') +
+      '</div>' + foot('Guardar cambios');
+    var back = wireBack(e);
+    drawer.querySelector('[data-save]').onclick = function () {
+      var cambios = { fecha: el('#ed_fecha').value, ejecutor: el('#ed_ejec').value, oficial: el('#ed_oficial').value, obs: el('#ed_obs').value };
+      extra.forEach(function (f) { cambios[f[0]] = el('#ed_' + f[0]).value; });
+      var r = H.editarEvento(ev, cambios); toast(r.ok ? 'Evento actualizado' : (r.error || 'No se pudo'), r.ok ? '' : 'warn'); back();
+    };
   }
 
   // ---- sub-formulario: nuevo pendiente ----
@@ -2674,10 +2744,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     subForm(e, 'Nuevo pendiente',
       '<div class="fld"><label>Tipo</label><select id="pTipo">' + opt(tipos, 'gestion_general') + '</select></div>' +
       '<div class="fld"><label>Descripción</label><textarea id="pDesc" placeholder="¿Qué hay que gestionar?"></textarea></div>' +
-      '<div class="grid-2"><div class="fld"><label>Responsable</label><select id="pEjec">' + opt([['', '—']].concat(EJEC.map(function (x) { return [x, x]; })), '') + '</select></div>' +
-        '<div class="fld"><label>Compromiso (opcional)</label><input type="date" id="pComp"></div></div>',
+      '<div class="grid-2"><div class="fld"><label>Responsable</label>' + ejecSel('pEjec', '') + '</div>' +
+        '<div class="fld"><label>Compromiso (opcional)</label><input type="date" id="pComp"></div></div>' +
+      '<div class="fld"><label>Próximo recordatorio (opcional)</label><input type="date" id="pRec"></div>',
       function () {
-        var d = { inv: e.inv, tipo: el('#pTipo').value, desc: el('#pDesc').value, ejecutor: el('#pEjec').value || null, fechaComp: el('#pComp').value || null };
+        var d = { inv: e.inv, tipo: el('#pTipo').value, desc: el('#pDesc').value, ejecutor: el('#pEjec').value || null, fechaComp: el('#pComp').value || null, proxRecord: el('#pRec').value || null };
         var r = H.crearPendiente(d);
         if (!r.ok) return toast(r.error || 'No se pudo crear', 'warn');
         toast('Pendiente creado'); paintEquipo(H.findEquipo(e.inv) || e);
@@ -2701,17 +2772,15 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       });
   }
 
-  // armazón común de sub-formularios
+  // armazón común de sub-formularios (cabecera, pie y navegación "volver")
+  function head(e, title) { return '<div class="d-head"><button class="d-close" data-x>✕</button><div class="d-fam">' + esc(e.fam || '') + '</div><div class="d-name">' + esc(title) + '</div><div class="d-mm">' + esc(e.equipo || '') + ' · ' + esc(e.inv) + '</div></div>'; }
+  function foot(label) { return '<div class="d-foot"><button class="savebtn" data-save>' + esc(label || 'Guardar') + '</button><button class="cancel" data-back>Cancelar</button></div>'; }
+  function fld(lab, inner) { return '<div class="fld"><label>' + lab + '</label>' + inner + '</div>'; }
+  function ejecSel(id, val) { return '<select id="' + id + '">' + opt([['', '—']].concat(EJEC.map(function (x) { return [x, x]; })), val || '') + '</select>'; }
+  function wireBack(e) { var back = function () { paintEquipo(H.findEquipo(e.inv) || e); }; var x = drawer.querySelector('[data-x]'); if (x) x.onclick = closeDrawer; var bs = drawer.querySelectorAll('[data-back]'); for (var i = 0; i < bs.length; i++) bs[i].onclick = back; return back; }
   function subForm(e, title, bodyHtml, onSave) {
-    drawer.innerHTML =
-      '<div class="d-head"><button class="d-close" data-x>✕</button><div class="d-fam">' + esc(e.fam || '') + '</div>' +
-      '<div class="d-name">' + esc(title) + '</div><div class="d-mm">' + esc(e.equipo || '') + ' · ' + esc(e.inv) + '</div></div>' +
-      '<div class="d-body"><button class="dback" data-back>← Volver al equipo</button>' + bodyHtml + '</div>' +
-      '<div class="d-foot"><button class="savebtn" data-save>Guardar</button><button class="cancel" data-back>Cancelar</button></div>';
-    var back = function () { paintEquipo(H.findEquipo(e.inv) || e); };
-    drawer.querySelector('[data-x]').onclick = closeDrawer;
-    var backs = drawer.querySelectorAll('[data-back]'); for (var b = 0; b < backs.length; b++) backs[b].onclick = back;
-    drawer.querySelector('[data-save]').onclick = onSave;
+    drawer.innerHTML = head(e, title) + '<div class="d-body"><button class="dback" data-back>← Volver al equipo</button>' + bodyHtml + '</div>' + foot('Guardar');
+    wireBack(e); drawer.querySelector('[data-save]').onclick = onSave;
   }
 
   /* ----------------------------- topbar/toolbar ------------------------- */
