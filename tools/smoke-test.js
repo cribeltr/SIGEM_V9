@@ -97,6 +97,12 @@ setTimeout(() => {
     click(d.querySelector('#moreBtn')); click(d.querySelector('.more-item[data-screen="cumplimiento"]'));
     ok('Cumplimiento: tabla por servicio', !!d.querySelector('#altScreen table.cmp-table') && d.querySelectorAll('#altScreen .cmp-table tbody tr').length > 0);
     ok('Cumplimiento: tendencia 12 meses', d.querySelectorAll('#altScreen .trend .trend-col').length === 12);
+    click(d.querySelector('#moreBtn')); click(d.querySelector('.more-item[data-screen="midia"]'));
+    ok('Mi día: alertas + lista de pendientes', d.querySelectorAll('#altScreen .mday-alert').length >= 6 && !!d.querySelector('#altScreen .mday-list'));
+    click(d.querySelector('#moreBtn')); click(d.querySelector('.more-item[data-screen="contactos"]'));
+    ok('Contactos: tabla editable + agregar', !!d.querySelector('#altScreen #cBody') && !!d.querySelector('#altScreen #cAdd'));
+    click(d.querySelector('#moreBtn')); click(d.querySelector('.more-item[data-screen="auditoria"]'));
+    ok('Auditoría: tabla de cambios', !!d.querySelector('#altScreen table.cmp-table'));
     click(d.querySelector('#moreBtn')); click(d.querySelector('.more-item[data-screen="gantt"]'));
     ok('vuelve a la Gantt (grid visible)', d.querySelector('#ganttScreen').style.display !== 'none' && d.querySelectorAll('#tb tr.row').length > 0);
 
