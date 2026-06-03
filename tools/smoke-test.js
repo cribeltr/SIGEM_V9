@@ -42,6 +42,8 @@ setTimeout(() => {
     ok('barra superior (mark MP)', /MP/.test((d.querySelector('.mark') || {}).textContent || ''));
     ok('KPIs pintados (4)', d.querySelectorAll('#kpis .kpi').length === 4);
     ok('cabecera con 12 meses', d.querySelectorAll('#thRow th.mth').length === 12);
+    ok('columna Pendientes + embudos de filtro', !!d.querySelector('#thRow th.pcol') && d.querySelectorAll('#thRow .thf').length >= 15);
+    ok('sin columnas PMP / MP-R', d.querySelectorAll('#thRow th.sum').length === 0);
     ok('contador = N° equipos', (d.querySelector('#countN') || {}).textContent === String(S.equipos.length));
     ok('grupos por familia', d.querySelectorAll('#tb tr.grp').length > 0);
     ok('filas de equipo visibles', d.querySelectorAll('#tb tr.row').length > 0);

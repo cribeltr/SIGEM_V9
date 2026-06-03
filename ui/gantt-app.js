@@ -150,10 +150,12 @@
       drawer = el('#drawer'), scrim = el('#scrim'), legend = el('#legend'), emptyEl = el('#empty');
 
   // cabecera de la tabla (meses + sumas)
-  var thHtml = '<th class="lead c-eq">Equipo</th><th class="lead c-srv">Servicio · Unidad</th>';
-  MES.forEach(function (m, i) { thHtml += '<th class="mth' + (i === NOW ? ' now' : '') + '">' + m + '</th>'; });
-  thHtml += '<th class="sum" title="MP programadas en el año">PMP</th><th class="sum" title="MP realizadas (Si)">MP-R</th>';
+  function funnel(col) { return '<span class="thf" data-fcol="' + col + '" title="Filtrar columna">▾</span>'; }
+  var thHtml = '<th class="lead c-eq">Equipo' + funnel('estado') + '</th><th class="lead c-srv">Servicio · Unidad' + funnel('servicio') + '</th>';
+  MES.forEach(function (m, i) { thHtml += '<th class="mth' + (i === NOW ? ' now' : '') + '">' + m + funnel('mes' + i) + '</th>'; });
+  thHtml += '<th class="pcol" title="Pendientes abiertos">Pend.' + funnel('pend') + '</th>';
   thRow.innerHTML = thHtml;
+  thRow.addEventListener('click', function (e) { var f = e.target.closest('.thf'); if (f) { e.stopPropagation(); openFunnel(f.getAttribute('data-fcol'), f); } });
 
   /* --------------------------- estado de la UI -------------------------- */
   var filt = { q: '', fam: '', estado: '', frec: '' };
@@ -162,6 +164,7 @@
   var screen = 'gantt';
   var tbMode = 'estado', cmpMode = 'servicio', cmpY = null, cmpM = null;
   var selInv = {};
+  var colFilters = { estado: null, servicio: null, pend: null, mes: {} };
 
   // poblar selects
   el('#fFam').innerHTML = '<option value="">Todas las familias</option>' + uniqueFams().map(function (f) { return '<option>' + esc(f) + '</option>'; }).join('');
@@ -200,7 +203,43 @@
     if (filt.estado && e.estado !== filt.estado) return false;
     if (filt.frec && norm(e.freq).indexOf(norm(filt.frec)) < 0) return false;
     if (filt.q) { var q = norm(filt.q); if (norm([e.inv, e.equipo, e.marca, e.modelo, e.serie, e.servicio, e.unidad, e.ubic].join(' ')).indexOf(q) < 0) return false; }
+    if (colFilters.estado && !colFilters.estado.has(e.estado)) return false;
+    if (colFilters.servicio && !colFilters.servicio.has(e.servicio || '(sin servicio)')) return false;
+    if (colFilters.pend) { var pc = H.pendientesDe(e.inv).some(function (p) { return p.estado !== 'cerrado'; }) ? 'con' : 'sin'; if (!colFilters.pend.has(pc)) return false; }
+    for (var mi = 0; mi < 12; mi++) { var mf = colFilters.mes[mi]; if (mf && !mf.has(cellCode(e, mi))) return false; }
     return true;
+  }
+
+  /* ----- filtros por columna (tipo Excel) ----- */
+  function cellCode(e, i) { return cellInfo(e, i).txt || '(vacío)'; }
+  function colActive(col) { return col.indexOf('mes') === 0 ? !!colFilters.mes[+col.slice(3)] : !!colFilters[col]; }
+  function updateFunnels() { var fs = thRow.querySelectorAll('.thf'); for (var i = 0; i < fs.length; i++) fs[i].classList.toggle('on', colActive(fs[i].getAttribute('data-fcol'))); }
+  function getColFilter(col) { return col.indexOf('mes') === 0 ? colFilters.mes[+col.slice(3)] : colFilters[col]; }
+  function setColFilter(col, set) { if (col.indexOf('mes') === 0) { var i = +col.slice(3); if (set) colFilters.mes[i] = set; else delete colFilters.mes[i]; } else colFilters[col] = set || null; renderGrid(); }
+  function distinctFor(col) {
+    var all = eqs();
+    if (col === 'estado') return ['no_operativo', 'en_servicio_tecnico', 'operativo', 'baja', 'desconocido'].filter(function (k) { return all.some(function (e) { return e.estado === k; }); }).map(function (k) { return { v: k, l: ESTADO_LABEL[k] || k }; });
+    if (col === 'servicio') { var s = {}; all.forEach(function (e) { s[e.servicio || '(sin servicio)'] = 1; }); return Object.keys(s).sort(function (a, b) { return a.localeCompare(b, 'es'); }).map(function (v) { return { v: v, l: v }; }); }
+    if (col === 'pend') return [{ v: 'con', l: 'Con pendientes' }, { v: 'sin', l: 'Sin pendientes' }];
+    if (col.indexOf('mes') === 0) { var i = +col.slice(3), m = {}; all.forEach(function (e) { m[cellCode(e, i)] = 1; }); var ord = ['R', 'X']; return Object.keys(m).sort(function (a, b) { var ia = ord.indexOf(a), ib = ord.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b); }).map(function (v) { return { v: v, l: v }; }); }
+    return [];
+  }
+  function closeFunnel() { var p = el('#funnelPop'); if (p) p.remove(); }
+  function openFunnel(col, anchor) {
+    closeFunnel();
+    var vals = distinctFor(col), cur = getColFilter(col), sel = {};
+    vals.forEach(function (o) { sel[o.v] = cur ? cur.has(o.v) : true; });
+    var pop = document.createElement('div'); pop.className = 'funnel-pop'; pop.id = 'funnelPop';
+    pop.innerHTML = '<div class="fp-hd"><button data-all="1">Todos</button><button data-all="0">Ninguno</button><button data-x title="Cerrar">✕</button></div><div class="fp-body">' +
+      vals.map(function (o) { return '<label class="fp-row"><input type="checkbox" data-v="' + esc(o.v) + '"' + (sel[o.v] ? ' checked' : '') + '> ' + esc(o.l) + '</label>'; }).join('') + '</div>';
+    document.body.appendChild(pop);
+    var r = anchor.getBoundingClientRect(); pop.style.left = Math.max(6, Math.min(r.left - 8, window.innerWidth - 236)) + 'px'; pop.style.top = (r.bottom + 4) + 'px';
+    function apply() { var on = Object.keys(sel).filter(function (k) { return sel[k]; }); setColFilter(col, on.length === vals.length ? null : new Set(on)); updateFunnels(); }
+    pop.onclick = function (e) {
+      var c = e.target.closest('input[data-v]'); if (c) { sel[c.getAttribute('data-v')] = c.checked; apply(); return; }
+      var a = e.target.closest('[data-all]'); if (a) { var v = a.getAttribute('data-all') === '1'; vals.forEach(function (o) { sel[o.v] = v; }); var ins = pop.querySelectorAll('input[data-v]'); for (var i = 0; i < ins.length; i++) ins[i].checked = v; apply(); return; }
+      if (e.target.closest('[data-x]')) closeFunnel();
+    };
   }
 
   /* ------------------------------- render ------------------------------- */
@@ -248,26 +287,28 @@
       rows.forEach(function (e) { var c = mpCounts(e); prog += c.prog; done += c.done; });
       var pct = prog ? Math.round(done / prog * 100) : 0;
       var isC = !!collapsed[fam];
-      html += '<tr class="grp' + (isC ? ' collapsed' : '') + '" data-fam="' + esc(fam) + '"><td colspan="16"><div class="grp-in">' +
+      html += '<tr class="grp' + (isC ? ' collapsed' : '') + '" data-fam="' + esc(fam) + '"><td colspan="15"><div class="grp-in">' +
         '<span class="grp-tw">▾</span><span class="grp-name">' + esc(fam) + '</span><span class="grp-badge">' + rows.length + '</span>' +
         '<span class="grp-prog"><span>' + done + '/' + prog + ' MP-R</span><span class="gbar"><i style="width:' + pct + '%"></i></span><span>' + pct + '%</span></span></div></td></tr>';
       if (isC) return;
       rows.forEach(function (e) {
-        var st = stOf(e), c = mpCounts(e), cells = '';
+        var st = stOf(e), cells = '';
         for (var i = 0; i < 12; i++) {
           var ci = cellInfo(e, i);
           cells += '<td class="mcell' + (i === NOW ? ' now' : '') + '" data-mo="' + i + '" title="' + esc(ci.tip) + '">' + (ci.txt ? '<span class="mk ' + ci.cls + '">' + esc(ci.txt) + '</span>' : '') + '</td>';
         }
         var srv = e.servicio ? '<span class="srv-name">' + esc(e.servicio) + '</span>' : '<span class="srv-name" style="color:var(--faint)">—</span>';
         var sub = (e.unidad || e.ubic) ? '<span class="srv-sub">' + esc(e.unidad || e.ubic) + '</span>' : '';
+        var pc = H.pendientesDe(e.inv).filter(function (p) { return p.estado !== 'cerrado'; }).length;
         html += '<tr class="row" data-inv="' + esc(e.inv) + '">' +
           '<td class="c-eq"><div class="eq-cell"><input type="checkbox" class="rowchk" data-inv="' + esc(e.inv) + '"' + (selInv[e.inv] ? ' checked' : '') + '><span class="eq-dot" style="background:var(' + st.c + ')"></span><div class="eq-meta">' +
           '<div class="eq-name">' + esc(e.equipo || '—') + '</div><div class="eq-sub">' + esc(e.inv || 's/inv') + (e.marca ? ' · ' + esc(e.marca) : '') + '</div></div></div></td>' +
           '<td class="c-srv">' + srv + sub + '</td>' + cells +
-          '<td class="sum' + (c.prog ? '' : ' z') + '">' + (c.prog || '·') + '</td><td class="sum' + (c.done ? '' : ' z') + '">' + (c.done || '·') + '</td></tr>';
+          '<td class="pcol' + (pc ? '' : ' z') + '">' + (pc ? '<span class="pend-badge">' + pc + '</span>' : '·') + '</td></tr>';
       });
     });
     tb.innerHTML = html;
+    updateFunnels();
     emptyEl.style.display = list.length ? 'none' : 'block';
     if (curInv) selectRow(curInv);
   }
@@ -602,7 +643,7 @@
   el('#confChip').onclick = function () { paintConflictos(); };
   el('#moreBtn').onclick = function (e) { e.stopPropagation(); el('#moreMenu').classList.toggle('on'); };
   el('#moreMenu').onclick = function (e) { var b = e.target.closest('.more-item[data-screen]'); if (b) showScreen(b.getAttribute('data-screen')); };
-  document.addEventListener('click', function (e) { if (!e.target.closest('#moreWrap')) closeMore(); });
+  document.addEventListener('click', function (e) { if (!e.target.closest('#moreWrap')) closeMore(); if (!e.target.closest('#funnelPop') && !e.target.closest('.thf')) closeFunnel(); });
   el('#expGantt').onclick = function () { exportEquipos(null); };
   el('#cmdkIn').oninput = function (e) { cmdkFilter(e.target.value); };
   el('#cmdkList').onclick = function (e) { var it = e.target.closest('.cmdk-item'); if (it) cmdkRun(+it.getAttribute('data-i')); };
@@ -643,7 +684,7 @@
       return;
     }
     if (ev.key === '/' && !inField && !drawer.classList.contains('on')) { ev.preventDefault(); openCmdk(); return; }
-    if (ev.key === 'Escape') { if (drawer.classList.contains('on')) closeDrawer(); legend.classList.remove('on'); closeMore(); return; }
+    if (ev.key === 'Escape') { if (drawer.classList.contains('on')) closeDrawer(); legend.classList.remove('on'); closeMore(); closeFunnel(); return; }
     if ((ev.key === 'j' || ev.key === 'k') && screen === 'gantt' && !inField && !drawer.classList.contains('on')) { navGrid(ev.key === 'j' ? 1 : -1); }
     else if (ev.key === 'Enter' && screen === 'gantt' && !inField && !drawer.classList.contains('on')) { var r = tb.querySelector('tr.row.kb-focus'); if (r) { var eq = H.findEquipo(r.getAttribute('data-inv')); if (eq) paintEquipo(eq); } }
   });
@@ -1113,11 +1154,12 @@
     if (!window.XLSX) return toast('XLSX no disponible', 'warn');
     var src = invs ? invs.map(function (i) { return H.findEquipo(i); }).filter(Boolean) : eqs().filter(matches);
     if (!src.length) return toast('Sin equipos para exportar', 'warn');
-    var header = ['N° Inv.', 'Equipo', 'Servicio', 'Unidad', 'Ubicación', 'Marca', 'Modelo', 'Serie', 'Año', 'Frecuencia', 'Estado'].concat(MES).concat(['PMP', 'MP-R']);
+    var header = ['N° Inv.', 'Equipo', 'Servicio', 'Unidad', 'Ubicación', 'Marca', 'Modelo', 'Serie', 'Año', 'Frecuencia', 'Estado'].concat(MES).concat(['Pend. abiertos']);
     var rows = src.map(function (e) {
       var base = [e.inv, e.equipo || '', e.servicio || '', e.unidad || '', e.ubic || '', e.marca || '', e.modelo || '', e.serie || '', e.ano || '', e.freq || '', ESTADO_LABEL[e.estado] || e.estado];
       var cells = []; for (var i = 0; i < 12; i++) { var res = H.resultadoMPMes(e, YEAR, i); cells.push(res || ((e.prog || {})[MES[i]] || '')); }
-      var c = mpCounts(e); return base.concat(cells).concat([c.prog, c.done]);
+      var pc = H.pendientesDe(e.inv).filter(function (p) { return p.estado !== 'cerrado'; }).length;
+      return base.concat(cells).concat([pc]);
     });
     var X = window.XLSX, wb = X.utils.book_new(); X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([header].concat(rows)), 'Equipos');
     dlBlob(new Blob([X.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/octet-stream' }), 'Equipos_' + (invs ? 'seleccion' : 'filtrado') + '_' + YEAR + '.xlsx');

@@ -47,6 +47,8 @@ KPIs, filtros y panel lateral. Usa los datos reales (estado recalculado,
 `prog`/`registro`) y expone las funciones del programa:
 
 - clic en una celda **registra/corrige la MP** (Si/C1–C8/FS/NU/Baja) con recálculo;
+- la matriz incluye una columna de **Pendientes** por equipo y **filtros tipo Excel**
+  (embudo ▾ en cada cabecera: estado, servicio, cada mes y pendientes);
 - el panel del equipo da acceso a bitácora (oficializar/anular/editar), pendientes,
   ciclos, baja, encargado, notas, gestión, **adjuntos en Google Drive** (al abrir
   desde Apps Script), y a **Nuevo evento** con los campos por tipo
