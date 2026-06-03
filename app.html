@@ -202,6 +202,43 @@ tr.grp .grp-in{display:flex;align-items:center;gap:10px;padding:0 12px;cursor:po
 .notice{font-size:11.5px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:7px;padding:8px 10px;margin:4px 0 10px}
 .notice.info{border-left-color:var(--warn)}
 .sec-empty{font-size:11.5px;color:var(--faint);font-style:italic;padding:2px 0 6px}
+/* ---- menú "Más" + pantallas Tablero / Cumplimiento (Fase 3) ---- */
+.more-menu{display:none;position:absolute;right:0;top:40px;z-index:30;background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);min-width:190px;padding:6px}
+.more-menu.on{display:block;animation:rise .18s ease}
+.more-item{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;padding:8px 10px;border-radius:7px;cursor:pointer;text-decoration:none}
+.more-item:hover{background:var(--panel2);color:var(--accent)}
+.more-item.on{color:var(--accent);background:var(--accent-bg)}
+.seg2{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px;margin-bottom:12px}
+.seg2 button{border:0;background:none;color:var(--muted);font:inherit;font-weight:600;font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer}
+.seg2 button.on{background:var(--panel);color:var(--accent);box-shadow:var(--shadow)}
+.scr-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.scr-hd h2{font-family:var(--cond);font-weight:700;font-size:19px;margin:0}
+.kb-board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start}
+.kb-col{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:8px;min-height:90px}
+.kb-col-h{display:flex;align-items:center;gap:8px;font-weight:700;font-size:12.5px;margin:2px 4px 8px;padding-left:6px;border-left:3px solid var(--line2)}
+.kb-col-h .n{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:1px 8px}
+.kb-card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line2);border-radius:8px;padding:7px 9px;margin-bottom:7px;cursor:pointer;transition:.12s}
+.kb-card:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:var(--shadow)}
+.kb-inv{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.kb-eq{font-weight:600;font-size:12.5px;margin:1px 0}
+.kb-meta{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.kb-acts{display:flex;gap:5px;margin-top:6px}
+.kb-more{font-size:11px;color:var(--faint);text-align:center;padding:4px}
+.cmp-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.cmp-table th{position:sticky;top:0;background:var(--panel2);border-bottom:2px solid var(--line2);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;padding:7px 8px;text-align:right;white-space:nowrap}
+.cmp-table th.l,.cmp-table td.l{text-align:left}
+.cmp-table td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:right;white-space:nowrap}
+.cmp-table tr.tot td{font-weight:700;border-top:2px solid var(--line2);background:var(--panel2)}
+.cmp-bar{display:inline-block;vertical-align:middle;width:64px;height:6px;border-radius:4px;background:var(--line);overflow:hidden;margin-left:6px}
+.cmp-bar i{display:block;height:100%;border-radius:4px}
+.cmp-pct{font-weight:700}.cmp-pct.op{color:var(--op)}.cmp-pct.st{color:var(--warn)}.cmp-pct.no{color:var(--alert)}
+.trend{display:flex;gap:5px;align-items:flex-end;height:90px}
+.trend-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-size:9.5px;color:var(--muted)}
+.trend-col.on .trend-lbl{color:var(--accent);font-weight:700}
+.trend-bar-wrap{width:100%;height:60px;display:flex;align-items:flex-end;background:var(--panel2);border-radius:4px;overflow:hidden}
+.trend-bar{width:100%;border-radius:4px 4px 0 0;background:var(--accent)}
+.trend-bar.op{background:var(--op)}.trend-bar.st{background:var(--warn)}.trend-bar.no{background:var(--alert)}
+@media(max-width:720px){.kb-board{grid-template-columns:1fr}}
 
 </style>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('sigem_theme')||'light')}catch(e){}</script>
@@ -2433,6 +2470,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   var filt = { q: '', fam: '', estado: '', frec: '' };
   var collapsed = {}, allCollapsed = false;
   var drawerMode = null, curInv = null;
+  var screen = 'gantt';
+  var tbMode = 'estado', cmpMode = 'servicio', cmpY = null, cmpM = null;
 
   // poblar selects
   el('#fFam').innerHTML = '<option value="">Todas las familias</option>' + uniqueFams().map(function (f) { return '<option>' + esc(f) + '</option>'; }).join('');
@@ -2861,6 +2900,9 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   el('#legendBtn').onclick = function () { legend.classList.toggle('on'); };
   el('#cfgBtn').onclick = function () { paintConfig(); };
   el('#confChip').onclick = function () { paintConflictos(); };
+  el('#moreBtn').onclick = function (e) { e.stopPropagation(); el('#moreMenu').classList.toggle('on'); };
+  el('#moreMenu').onclick = function (e) { var b = e.target.closest('.more-item[data-screen]'); if (b) showScreen(b.getAttribute('data-screen')); };
+  document.addEventListener('click', function (e) { if (!e.target.closest('#moreWrap')) closeMore(); });
   el('#expBtn').onclick = function () {
     var blob = new Blob([H.exportarBackupJSON()], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sigem-backup-' + H.hoyLocal() + '.json'; a.click();
@@ -2884,7 +2926,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     paintEquipo(e);
   });
   scrim.addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { if (drawer.classList.contains('on')) closeDrawer(); legend.classList.remove('on'); } });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { if (drawer.classList.contains('on')) closeDrawer(); legend.classList.remove('on'); closeMore(); } });
 
   /* --------------------------- Configuración ---------------------------- */
   function cloudStatusText() { return Cloud.connected ? ('Almacén activo' + (Cloud.gas ? ' (Apps Script)' : '') + (Cloud.lastSync ? ' · última sincronización: ' + new Date(Cloud.lastSync).toLocaleString('es-CL') : ' · sin sincronizar aún')) : 'Sin conectar a Google Sheets (los datos viven en este navegador).'; }
@@ -3028,6 +3070,157 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     document.body.appendChild(inp); inp.click();
   }
 
+  /* ------------------- pantallas (Más ▾): Tablero / Cumplimiento -------------------- */
+  function closeMore() { var m = el('#moreMenu'); if (m) m.classList.remove('on'); }
+  function showScreen(name) {
+    screen = name; closeMore();
+    var g = el('#ganttScreen'), alt = el('#altScreen'), tbar = el('#toolbar');
+    var items = document.querySelectorAll('.more-item[data-screen]');
+    for (var i = 0; i < items.length; i++) items[i].classList.toggle('on', items[i].getAttribute('data-screen') === name);
+    if (name === 'gantt') { g.style.display = ''; alt.style.display = 'none'; if (tbar) tbar.style.display = ''; render(); }
+    else { g.style.display = 'none'; alt.style.display = ''; if (tbar) tbar.style.display = 'none'; if (name === 'tablero') renderTablero(); else renderCumplimiento(); }
+  }
+
+  // ---- Tablero (kanban): columnas con clic para abrir la ficha / avanzar pendientes ----
+  var TBC = { no_operativo: '--alert', en_servicio_tecnico: '--warn', operativo: '--op' };
+  function kbCol(label, colorVar, n, cardsHtml) { return '<div class="kb-col"><div class="kb-col-h" style="border-left-color:var(' + colorVar + ')">' + esc(label) + '<span class="n">' + n + '</span></div>' + (cardsHtml || '<div class="kb-more">—</div>') + '</div>'; }
+  function renderTablero() {
+    var alt = el('#altScreen');
+    alt.innerHTML = '<div class="scr-hd"><h2>Tablero</h2><div class="seg2" id="tbSeg">' +
+      [['estado', 'Por estado'], ['pendientes', 'Pendientes'], ['correctivos', 'Correctivos']].map(function (o) { return '<button data-m="' + o[0] + '"' + (tbMode === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') +
+      '</div></div><div id="tbBoard"></div>';
+    el('#tbSeg').onclick = function (e) { var b = e.target.closest('button[data-m]'); if (!b) return; tbMode = b.getAttribute('data-m'); renderTablero(); };
+    var board = el('#tbBoard');
+    board.innerHTML = tbMode === 'pendientes' ? boardPendientes() : tbMode === 'correctivos' ? boardCorrectivos() : boardEstado();
+    board.onclick = function (e) {
+      var pa = e.target.closest('[data-pend]');
+      if (pa) { e.stopPropagation(); var p = findPend(pa.getAttribute('data-pend')); if (!p) return; var a = pa.getAttribute('data-do'); if (a === 'avanzar') H.cambiarEstadoPend(p, p.estado === 'no_iniciado' ? 'en_proceso' : 'cerrado'); else if (a === 'cerrar') H.cerrarPendiente(p, ''); else if (a === 'reabrir') H.cambiarEstadoPend(p, 'en_proceso'); renderTablero(); return; }
+      var card = e.target.closest('[data-inv]'); if (card) { var eq = H.findEquipo(card.getAttribute('data-inv')); if (eq) paintEquipo(eq); }
+    };
+  }
+  function boardEstado() {
+    var S = H.getState(), CAP = 60, cols = [['no_operativo', 'No operativo'], ['en_servicio_tecnico', 'En servicio técnico'], ['operativo', 'Operativo']];
+    return '<div class="kb-board">' + cols.map(function (col) {
+      var list = S.equipos.filter(function (e) { return e.estado === col[0]; });
+      if (col[0] !== 'operativo') list.sort(function (a, b) { return H.diasEnEstado(b) - H.diasEnEstado(a); });
+      var cards = list.slice(0, CAP).map(function (e) {
+        var enc = H.encargadoDe(e);
+        return '<div class="kb-card" data-inv="' + esc(e.inv) + '" style="border-left-color:var(' + TBC[col[0]] + ')"><div class="kb-inv">' + esc(e.inv) + '</div><div class="kb-eq">' + esc(e.equipo || '—') + '</div><div class="kb-meta"><span>' + esc(e.servicio || '—') + '</span>' + (col[0] !== 'operativo' ? '<span><b>' + H.diasEnEstado(e) + '</b> d</span>' : '') + (enc ? '<span>' + esc(enc) + '</span>' : '') + '</div></div>';
+      }).join('');
+      return kbCol(col[1], TBC[col[0]], list.length, cards + (list.length > CAP ? '<div class="kb-more">+' + (list.length - CAP) + ' más · filtra en la Gantt</div>' : ''));
+    }).join('') + '</div>';
+  }
+  function boardPendientes() {
+    var S = H.getState(), cols = [['no_iniciado', 'No iniciado', '--alert'], ['en_proceso', 'En proceso', '--warn'], ['cerrado', 'Resuelto', '--op']];
+    return '<div class="kb-board">' + cols.map(function (col) {
+      var list = (S.pendientes || []).filter(function (p) { return !p.anulado && p.estado === col[0]; });
+      var cards = list.slice(0, 60).map(function (p) {
+        var acts = col[0] === 'cerrado' ? '<button class="mini" data-pend="' + p.id + '" data-do="reabrir">Reabrir</button>'
+          : '<button class="mini" data-pend="' + p.id + '" data-do="avanzar">' + (p.estado === 'no_iniciado' ? 'Iniciar' : 'Avanzar') + '</button><button class="mini" data-pend="' + p.id + '" data-do="cerrar">Resolver</button>';
+        return '<div class="kb-card" data-inv="' + esc(p.inv) + '" style="border-left-color:var(' + col[2] + ')"><div class="kb-inv">' + esc(p.inv) + ' · ' + esc(TIPO_PEND[p.tipo] || p.tipo) + '</div><div class="kb-eq" style="font-size:12px">' + esc(p.desc || '') + '</div><div class="kb-meta">' + (p.ejecutor ? '<span>' + esc(p.ejecutor) + '</span>' : '<span style="color:var(--faint)">sin asignar</span>') + '</div><div class="kb-acts">' + acts + '</div></div>';
+      }).join('');
+      return kbCol(col[1], col[2], list.length, cards);
+    }).join('') + '</div>';
+  }
+  function boardCorrectivos() {
+    var S = H.getState(), stages = ['Solicitud de trabajo', 'Visita técnica', 'Orden de Compra', 'Envío a servicio técnico', 'Recepción', 'Reparación'];
+    var abiertos = (S.ciclos || []).filter(function (c) { return c.estado === 'abierto'; });
+    function etapa(inv) { var evs = H.eventosDe(inv).filter(function (e) { return !e.anulado && stages.indexOf(e.tipo) >= 0; }); if (!evs.length) return stages[0]; evs.sort(function (a, b) { return (a.fecha || '').localeCompare(b.fecha || '') || (a.id - b.id); }); return evs[evs.length - 1].tipo; }
+    return '<div class="kb-board" style="grid-template-columns:repeat(' + stages.length + ',minmax(120px,1fr))">' + stages.map(function (st) {
+      var list = abiertos.filter(function (c) { return etapa(c.inv) === st; });
+      var cards = list.map(function (c) { var e = H.findEquipo(c.inv) || {}; return '<div class="kb-card" data-inv="' + esc(c.inv) + '" style="border-left-color:var(--accent)"><div class="kb-inv">' + esc(c.folio || '#' + c.id) + '</div><div class="kb-eq">' + esc(e.equipo || c.inv) + '</div><div class="kb-meta"><span>' + esc(c.inv) + '</span>' + (c.ingenieroAsignado ? '<span>' + esc(c.ingenieroAsignado) + '</span>' : '') + '</div></div>'; }).join('');
+      return kbCol(st, '--accent', list.length, cards);
+    }).join('') + '</div>';
+  }
+
+  // ---- Cumplimiento (por servicio / responsable / mes + tendencia + export) ----
+  function pctCls(v) { return v == null ? '' : v >= 90 ? 'op' : v >= 60 ? 'st' : 'no'; }
+  function pctCell(v) { if (v == null) return '<td style="color:var(--faint)">—</td>'; return '<td><span class="cmp-pct ' + pctCls(v) + '">' + v + '%</span><span class="cmp-bar"><i style="width:' + v + '%;background:var(' + (v >= 90 ? '--op' : v >= 60 ? '--warn' : '--alert') + ')"></i></span></td>'; }
+  function renderCumplimiento() {
+    if (cmpY == null) cmpY = YEAR; if (cmpM == null) cmpM = NOW;
+    var alt = el('#altScreen');
+    alt.innerHTML = '<div class="scr-hd"><h2>Cumplimiento</h2><div class="seg2" id="cmpSeg">' +
+      [['servicio', 'Por servicio'], ['responsable', 'Por responsable'], ['mes', 'Por mes']].map(function (o) { return '<button data-m="' + o[0] + '"' + (cmpMode === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div>' +
+      '<div style="flex:1"></div>Mes <select class="sel" id="cmpMes">' + MES.map(function (m, i) { return '<option value="' + i + '"' + (i === cmpM ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select>' +
+      '<select class="sel" id="cmpAno">' + [cmpY + 1, cmpY, cmpY - 1, cmpY - 2].map(function (y) { return '<option' + (y === cmpY ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
+      '<button class="tbtn" id="cmpExport">Exportar</button></div><div id="cmpTrend"></div><div id="cmpBody"></div>';
+    el('#cmpSeg').onclick = function (e) { var b = e.target.closest('button[data-m]'); if (!b) return; cmpMode = b.getAttribute('data-m'); renderCumplimiento(); };
+    el('#cmpMes').onchange = function (e) { cmpM = +e.target.value; renderCumplimiento(); };
+    el('#cmpAno').onchange = function (e) { cmpY = +e.target.value; renderCumplimiento(); };
+    el('#cmpExport').onclick = exportCumplimiento;
+    el('#cmpTrend').innerHTML = cmpTrendHtml();
+    el('#cmpTrend').onclick = function (e) { var c = e.target.closest('[data-mo]'); if (c) { cmpM = +c.getAttribute('data-mo'); renderCumplimiento(); } };
+    el('#cmpBody').innerHTML = cmpMode === 'responsable' ? cmpResponsableHtml() : cmpMode === 'mes' ? cmpMesHtml() : cmpServicioHtml();
+  }
+  function cmpTrendHtml() {
+    var vivos = eqs().filter(function (e) { return e.estado !== 'baja'; });
+    var cols = MES.map(function (mm, i) {
+      var prog = vivos.filter(function (e) { return H.mpProgramadaEnMes(e, mm); });
+      var ejec = prog.filter(function (e) { return H.mpDelMesEjecutada(e, cmpY, i); }).length;
+      var pct = prog.length ? Math.round(ejec / prog.length * 100) : null;
+      return '<div class="trend-col' + (i === cmpM ? ' on' : '') + '" data-mo="' + i + '" title="' + mm + ' ' + cmpY + ': ' + (pct == null ? 'sin programación' : pct + '% · ' + ejec + '/' + prog.length) + '"><div>' + (pct == null ? '—' : pct + '%') + '</div><div class="trend-bar-wrap"><div class="trend-bar ' + pctCls(pct) + '" style="height:' + (pct || 0) + '%"></div></div><div class="trend-lbl">' + mm + '</div></div>';
+    }).join('');
+    return '<div class="sec-h" style="margin-bottom:8px">Tendencia mensual MP · ' + cmpY + ' <span class="tag">clic en un mes</span></div><div class="trend">' + cols + '</div><div style="height:14px"></div>';
+  }
+  function svcRows() {
+    return Array.from(new Set(eqs().map(function (e) { return e.servicio || '(sin servicio)'; }))).sort().map(function (sv) {
+      var es = eqs().filter(function (e) { return (e.servicio || '(sin servicio)') === sv; });
+      var vivos = es.filter(function (e) { return e.estado !== 'baja'; });
+      var op = es.filter(function (e) { return e.estado === 'operativo'; }).length;
+      var prog = vivos.filter(function (e) { return H.mpProgramadaEnMes(e, MES[cmpM]); });
+      var ejec = prog.filter(function (e) { return H.mpDelMesEjecutada(e, cmpY, cmpM); }).length;
+      var atr = vivos.filter(function (e) { for (var mm = 0; mm < cmpM; mm++) { if (H.mpProgramadaEnMes(e, MES[mm]) && H.mpEstadoMes(e, cmpY, mm) === 'pendiente') return true; } return false; }).length;
+      var pend = es.reduce(function (a, e) { return a + H.pendientesDe(e.inv).filter(function (p) { return p.estado !== 'cerrado'; }).length; }, 0);
+      return { sv: sv, total: es.length, vivos: vivos.length, op: op, prog: prog.length, ejec: ejec, atr: atr, pend: pend, pctMP: prog.length ? Math.round(ejec / prog.length * 100) : null, pctOp: vivos.length ? Math.round(op / vivos.length * 100) : null };
+    });
+  }
+  function cmpServicioHtml() {
+    var rows = svcRows(), tot = { total: 0, op: 0, vivos: 0, prog: 0, ejec: 0, atr: 0, pend: 0 };
+    var body = rows.map(function (r) {
+      tot.total += r.total; tot.op += r.op; tot.vivos += r.vivos; tot.prog += r.prog; tot.ejec += r.ejec; tot.atr += r.atr; tot.pend += r.pend;
+      return '<tr><td class="l">' + esc(r.sv) + '</td><td>' + r.total + '</td>' + pctCell(r.pctOp) + '<td>' + r.ejec + '/' + r.prog + '</td>' + pctCell(r.pctMP) + '<td>' + (r.atr || '·') + '</td><td>' + (r.pend || '·') + '</td></tr>';
+    }).join('');
+    return '<div style="overflow:auto;max-width:100%"><table class="cmp-table"><thead><tr><th class="l">Servicio</th><th>Equipos</th><th>% Operativo</th><th>MP mes</th><th>% Cumpl.</th><th>Atras.</th><th>Pend.</th></tr></thead><tbody>' + body +
+      '<tr class="tot"><td class="l">TOTAL</td><td>' + tot.total + '</td>' + pctCell(tot.vivos ? Math.round(tot.op / tot.vivos * 100) : null) + '<td>' + tot.ejec + '/' + tot.prog + '</td>' + pctCell(tot.prog ? Math.round(tot.ejec / tot.prog * 100) : null) + '<td>' + tot.atr + '</td><td>' + tot.pend + '</td></tr></tbody></table></div>';
+  }
+  function respRows() {
+    var S = H.getState();
+    var esMP = function (e, mes) { return !e.anulado && e.tipo === 'Mantención preventiva' && e.resultado === 'Si' && e.fecha && new Date(e.fecha + 'T00:00:00').getFullYear() === cmpY && (mes == null || new Date(e.fecha + 'T00:00:00').getMonth() === mes); };
+    var cargo = {}; eqs().forEach(function (e) { var en = H.encargadoDe(e); if (en) cargo[en] = (cargo[en] || 0) + 1; });
+    return EJEC.map(function (ej) {
+      var pend = (S.pendientes || []).filter(function (p) { return !p.anulado && p.estado !== 'cerrado' && p.ejecutor === ej; });
+      return { ej: ej, pend: pend.length, venc: pend.filter(function (p) { return p.fechaComp && p.fechaComp < H.hoyLocal(); }).length, mpMes: (S.eventos || []).filter(function (e) { return e.ejecutor === ej && esMP(e, cmpM); }).length, mpAno: (S.eventos || []).filter(function (e) { return e.ejecutor === ej && esMP(e, null); }).length, cargo: cargo[ej] || 0 };
+    }).sort(function (a, b) { return b.pend - a.pend || b.mpAno - a.mpAno; });
+  }
+  function cmpResponsableHtml() {
+    var body = respRows().map(function (r) { return '<tr><td class="l">' + esc(r.ej) + '</td><td>' + r.cargo + '</td><td>' + (r.pend || '·') + '</td><td>' + (r.venc ? '<span class="cmp-pct no">' + r.venc + '</span>' : '·') + '</td><td>' + r.mpMes + '</td><td>' + r.mpAno + '</td></tr>'; }).join('');
+    return '<div style="overflow:auto;max-width:100%"><table class="cmp-table"><thead><tr><th class="l">Responsable</th><th>A cargo</th><th>Pend.</th><th>Vencidos</th><th>MP mes</th><th>MP año</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+  }
+  function mesRows() {
+    var vivos = eqs().filter(function (e) { return e.estado !== 'baja'; });
+    return MES.map(function (mm, i) {
+      var asig = (H.getState().asignacionesMP || {})[cmpY + '-' + String(i + 1).padStart(2, '0')] || {};
+      var prog = 0, asignadas = 0, oficial = 0, borrador = 0, reprog = 0, noreg = 0;
+      vivos.forEach(function (e) { var c = H.claseMPMes(e, cmpY, i); if (!c) return; prog++; if (asig[e.inv]) asignadas++; if (c === 'oficial') oficial++; else if (c === 'borrador') borrador++; else if (c === 'reprog') reprog++; else if (c === 'noreg') noreg++; });
+      var realiz = oficial + borrador;
+      return { mm: mm, i: i, prog: prog, asignadas: asignadas, realiz: realiz, reprog: reprog, noreg: noreg, pct: prog ? Math.round(realiz / prog * 100) : null };
+    });
+  }
+  function cmpMesHtml() {
+    var body = mesRows().map(function (r) { return '<tr' + (r.i === cmpM ? ' style="background:var(--accent-bg)"' : '') + '><td class="l">' + r.mm + '</td><td>' + (r.prog || '·') + '</td><td>' + (r.asignadas || '·') + '</td><td>' + (r.realiz || '·') + '</td><td>' + (r.reprog || '·') + '</td><td>' + (r.noreg || '·') + '</td>' + pctCell(r.pct) + '</tr>'; }).join('');
+    return '<div style="overflow:auto;max-width:100%"><table class="cmp-table"><thead><tr><th class="l">Mes ' + cmpY + '</th><th>Prog.</th><th>Asign.</th><th>Realiz.</th><th>Reprog.</th><th>Sin reg.</th><th>% Cumpl.</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+  }
+  function exportCumplimiento() {
+    if (!window.XLSX) return toast('XLSX no disponible', 'warn');
+    var X = window.XLSX, aoa;
+    if (cmpMode === 'responsable') aoa = [['Responsable', 'A cargo', 'Pendientes', 'Vencidos', 'MP mes', 'MP año']].concat(respRows().map(function (r) { return [r.ej, r.cargo, r.pend, r.venc, r.mpMes, r.mpAno]; }));
+    else if (cmpMode === 'mes') aoa = [['Mes', 'Prog', 'Asignadas', 'Realizadas', 'Reprog', 'Sin reg', '% Cumpl']].concat(mesRows().map(function (r) { return [r.mm, r.prog, r.asignadas, r.realiz, r.reprog, r.noreg, r.pct]; }));
+    else aoa = [['Servicio', 'Equipos', '% Operativo', 'MP mes ejec', 'MP mes prog', '% Cumpl', 'Atrasadas', 'Pendientes']].concat(svcRows().map(function (r) { return [r.sv, r.total, r.pctOp, r.ejec, r.prog, r.pctMP, r.atr, r.pend]; }));
+    var wb = X.utils.book_new(); X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(aoa), 'Cumplimiento');
+    dlBlob(new Blob([X.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/octet-stream' }), 'Cumplimiento_' + cmpMode + '_' + (MES_FULL[MES[cmpM]] || MES[cmpM]) + '_' + cmpY + '.xlsx');
+    toast('Cumplimiento exportado');
+  }
+
   /* ------------------------------ toast --------------------------------- */
   var tt;
   function toast(msg, cls) { var t = el('#toast'); if (!t) return; t.textContent = msg; t.className = 'toast on' + (cls ? ' ' + cls : ''); clearTimeout(tt); tt = setTimeout(function () { t.classList.remove('on'); }, 2600); }
@@ -3051,6 +3244,14 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         '<div class="mark">MP</div>' +
         '<div class="ttl"><b>Carta Gantt · Mantenimiento Preventivo</b><span>Equipos Médicos Críticos — Hospital Hernán Henríquez Aravena · SIGEM</span></div>' +
         '<div class="year"><span id="yearLab">2026</span><small>PROGRAMACIÓN</small></div>' +
+        '<div id="moreWrap" style="position:relative">' +
+          '<button class="iconbtn" id="moreBtn" title="Más vistas">▾</button>' +
+          '<div class="more-menu" id="moreMenu">' +
+            '<button class="more-item" data-screen="gantt">Carta Gantt MP</button>' +
+            '<button class="more-item" data-screen="tablero">Tablero (kanban)</button>' +
+            '<button class="more-item" data-screen="cumplimiento">Cumplimiento</button>' +
+            '<a class="more-item" href="app-clasico.html" target="_blank" rel="noopener">App clásica ↗</a>' +
+          '</div></div>' +
         '<button class="iconbtn" id="impBtn" title="Importar respaldo (.json)">↑</button>' +
         '<button class="iconbtn" id="expBtn" title="Exportar respaldo (.json)">↓</button>' +
         '<button class="iconbtn" id="legendBtn" title="Leyenda">?</button>' +
@@ -3059,7 +3260,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         '<input type="file" id="impFile" accept="application/json,.json" hidden>' +
       '</div>' +
       '<div class="kpis" id="kpis"></div>' +
-      '<div class="toolbar">' +
+      '<div class="toolbar" id="toolbar">' +
         '<label class="search"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="5"></circle><path d="M11 11l3 3"></path></svg>' +
         '<input id="q" type="search" placeholder="Buscar equipo, N° inventario, marca, serie, ubicación…" autocomplete="off"></label>' +
         '<select class="sel" id="fFam"></select><select class="sel" id="fEstado"></select><select class="sel" id="fFrec"></select><select class="sel" id="fYear"></select>' +
@@ -3067,8 +3268,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         '<button class="tbtn" id="confChip" style="display:none;border-color:var(--warn);color:var(--warn)"></button>' +
         '<span class="count-chip"><b id="countN">0</b> equipos</span>' +
       '</div></header>' +
-      '<div class="grid-wrap"><table><thead><tr id="thRow"></tr></thead><tbody id="tb"></tbody></table>' +
-        '<div class="empty" id="empty" style="display:none">Sin resultados para el filtro actual.</div></div>' +
+      '<div class="grid-wrap">' +
+        '<div id="ganttScreen"><table><thead><tr id="thRow"></tr></thead><tbody id="tb"></tbody></table>' +
+          '<div class="empty" id="empty" style="display:none">Sin resultados para el filtro actual.</div></div>' +
+        '<div id="altScreen" style="display:none;padding:14px 16px"></div>' +
+      '</div>' +
       '</div>' +
       '<div class="legend" id="legend">' +
         '<h4>Marcas del calendario</h4>' +

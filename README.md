@@ -54,6 +54,10 @@ KPIs, filtros y panel lateral. Usa los datos reales (estado recalculado,
   respaldo JSON, mantenimiento de datos, **importar maestro `.xlsx` + conciliación**
   (resolver conflictos: maestro/programa/manual/posponer) y **plantilla de asignación
   MP** (descargar/subir). Aparece un indicador "⚠ conciliar" cuando hay conflictos.
+- menú **"Más" (▾)**: **Tablero** (kanban: por estado / pendientes / correctivos por
+  etapa; clic en una tarjeta abre la ficha, y los pendientes se avanzan/resuelven en
+  línea) y **Cumplimiento** (por servicio / responsable / mes + tendencia mensual y
+  **exportar a Excel**). También un acceso a la app clásica.
 
 Fuentes editables: `ui/gantt.css` y `ui/gantt-app.js` (dev: `ui/gantt.html`).
 
@@ -65,11 +69,10 @@ npm run build         # genera app.html + apps-script/Index.html (Carta Gantt MP
 npm test              # smoke test headless (jsdom) de app.html
 ```
 
-### App clásica completa (app-clasico.html) — en migración
+### App clásica completa (app-clasico.html) — referencia/respaldo
 
-Mientras se porta todo a la interfaz principal, la **app clásica** completa
-(Tablero, Cumplimiento, conciliación de maestro, etc.) se conserva y comparte el
-mismo estado/`localStorage`. Fuentes: `ui/styles.css` y `ui/app.js` (dev:
+La **app clásica** original se conserva como referencia y respaldo, compartiendo
+el mismo estado/`localStorage`. Fuentes: `ui/styles.css` y `ui/app.js` (dev:
 `ui/index.html`).
 
 ```bash
@@ -78,10 +81,11 @@ npm run test:clasico  # smoke test de app-clasico.html
 npm run build:all     # genera ambas interfaces
 ```
 
-> Migración por fases hacia la Gantt: **Fase 1 (hecha)** Configuración +
-> sincronización Google Sheets. **Fase 2 (hecha)** importar maestro `.xlsx` +
-> conciliación + plantilla MP. **Fase 3** Tablero (kanban) y Cumplimiento. Hasta
-> completar la Fase 3, esas dos vistas siguen disponibles en `app-clasico.html`.
+> Migración por fases hacia la Gantt (completa): **Fase 1** Configuración +
+> sincronización Google Sheets · **Fase 2** importar maestro `.xlsx` + conciliación
+> + plantilla MP · **Fase 3** Tablero (kanban) y Cumplimiento. Las tres están en la
+> interfaz principal (`app.html`). La hoja **`Registro`** legible del libro y la
+> regeneración de hojas son el siguiente refinamiento del backend.
 
 ## Despliegue (Google Sheets · opcional)
 

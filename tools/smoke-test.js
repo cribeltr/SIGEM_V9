@@ -84,6 +84,19 @@ setTimeout(() => {
     click(d.querySelector('#themeBtn'));
     ok('tema oscuro aplicado', d.documentElement.getAttribute('data-theme') === 'dark');
 
+    // 9) Menú "Más" → Tablero / Cumplimiento
+    click(d.querySelector('#moreBtn'));
+    ok('menú Más abre', d.querySelector('#moreMenu').classList.contains('on'));
+    click(d.querySelector('.more-item[data-screen="tablero"]'));
+    ok('Tablero: 3 columnas kanban', d.querySelectorAll('#altScreen .kb-col').length === 3);
+    click([...d.querySelectorAll('#tbSeg button')].find(b => b.getAttribute('data-m') === 'pendientes'));
+    ok('Tablero pendientes (3 columnas)', d.querySelectorAll('#altScreen .kb-col').length === 3);
+    click(d.querySelector('#moreBtn')); click(d.querySelector('.more-item[data-screen="cumplimiento"]'));
+    ok('Cumplimiento: tabla por servicio', !!d.querySelector('#altScreen table.cmp-table') && d.querySelectorAll('#altScreen .cmp-table tbody tr').length > 0);
+    ok('Cumplimiento: tendencia 12 meses', d.querySelectorAll('#altScreen .trend .trend-col').length === 12);
+    click(d.querySelector('#moreBtn')); click(d.querySelector('.more-item[data-screen="gantt"]'));
+    ok('vuelve a la Gantt (grid visible)', d.querySelector('#ganttScreen').style.display !== 'none' && d.querySelectorAll('#tb tr.row').length > 0);
+
     ok('sin errores de runtime en las interacciones', errs.length === errBefore);
     ok('sin errores de runtime (global)', errs.length === 0);
   } catch (e) {
