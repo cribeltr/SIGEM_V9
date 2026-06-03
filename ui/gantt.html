@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carta Gantt MP · SIGEM (dev)</title>
+<!-- Shell de DESARROLLO: carga los módulos por separado (igual orden que el build).
+     Edita ui/gantt.css y ui/gantt-app.js; regenera el archivo único con
+     `npm run build:gantt`. Comparte el localStorage con app.html. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="gantt.css">
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('sigem_theme')||'light')}catch(e){}</script>
+</head>
+<body>
+<script src="vendor/lz-string.min.js"></script>
+<script src="../src/seed-data.js"></script>
+<script src="../src/hhha-core.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="gantt-app.js"></script>
+</body>
+</html>
