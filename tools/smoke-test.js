@@ -69,9 +69,12 @@ setTimeout(() => {
     const evTipo = d.querySelector('#drawer #evTipo'); evTipo.value = 'Orden de Compra'; evTipo.dispatchEvent(new w.Event('change'));
     ok('nuevo evento: campos por tipo (OC)', !!d.querySelector('#drawer #ev_nCotiz') && !!d.querySelector('#drawer #ev_via'));
 
-    // 6) Configuración (Google Sheets / respaldo / mantenimiento)
+    // 6) Configuración (Google Sheets / respaldo / mantenimiento / maestro / plantilla)
     click(d.querySelector('#cfgBtn'));
     ok('panel Configuración abierto', !!d.querySelector('#drawer #cfgStatus') && d.querySelectorAll('#drawer [data-act^="cfg-"]').length > 0);
+    ok('config: maestro + plantilla', !!d.querySelector('#drawer [data-act="cfg-maestro"]') && !!d.querySelector('#drawer #cfgMes') && !!d.querySelector('#drawer #cfgAno'));
+    click(d.querySelector('#drawer [data-act="cfg-conf"]'));
+    ok('panel Conciliación abre', /Conflictos/.test((d.querySelector('#drawer .d-name') || {}).textContent || ''));
 
     // 7) MP directa desde una celda de la grilla
     click(d.querySelector('#tb tr.row td.mcell'));

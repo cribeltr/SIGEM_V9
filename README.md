@@ -51,7 +51,9 @@ KPIs, filtros y panel lateral. Usa los datos reales (estado recalculado,
   ciclos, baja, encargado, notas y gestión, y a **Nuevo evento** con los campos por
   tipo (Solicitud/Visita/OC/Envío/Recepción/Reparación/MP);
 - **Configuración** (⚙): sincronización con **Google Sheets** (Apps Script y HTTP),
-  respaldo JSON y mantenimiento de datos.
+  respaldo JSON, mantenimiento de datos, **importar maestro `.xlsx` + conciliación**
+  (resolver conflictos: maestro/programa/manual/posponer) y **plantilla de asignación
+  MP** (descargar/subir). Aparece un indicador "⚠ conciliar" cuando hay conflictos.
 
 Fuentes editables: `ui/gantt.css` y `ui/gantt-app.js` (dev: `ui/gantt.html`).
 
@@ -77,9 +79,9 @@ npm run build:all     # genera ambas interfaces
 ```
 
 > Migración por fases hacia la Gantt: **Fase 1 (hecha)** Configuración +
-> sincronización Google Sheets. **Fase 2** importar maestro `.xlsx` + conciliación
-> + plantilla MP. **Fase 3** Tablero (kanban) y Cumplimiento. Hasta completarlas,
-> esas funciones siguen disponibles en `app-clasico.html`.
+> sincronización Google Sheets. **Fase 2 (hecha)** importar maestro `.xlsx` +
+> conciliación + plantilla MP. **Fase 3** Tablero (kanban) y Cumplimiento. Hasta
+> completar la Fase 3, esas dos vistas siguen disponibles en `app-clasico.html`.
 
 ## Despliegue (Google Sheets · opcional)
 

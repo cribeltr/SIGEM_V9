@@ -2475,7 +2475,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   }
 
   /* ------------------------------- render ------------------------------- */
-  function render() { renderKpis(); renderGrid(); }
+  function render() { renderKpis(); renderGrid(); refreshConfChip(); }
   var rafT = null;
   function scheduleRender() {
     if (!ready) return;
@@ -2860,6 +2860,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   };
   el('#legendBtn').onclick = function () { legend.classList.toggle('on'); };
   el('#cfgBtn').onclick = function () { paintConfig(); };
+  el('#confChip').onclick = function () { paintConflictos(); };
   el('#expBtn').onclick = function () {
     var blob = new Blob([H.exportarBackupJSON()], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sigem-backup-' + H.hoyLocal() + '.json'; a.click();
@@ -2912,7 +2913,13 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
           '<button class="dact" data-act="cfg-dedup">Quitar MP duplicadas</button>' +
           '<button class="dact" data-act="cfg-normtipos">Normalizar tipos</button>' +
           '<button class="dact" data-act="cfg-ciclos">Reconstruir ciclos</button></div></div>' +
-        '<div class="sec"><div class="sec-h">Maestro y plantillas</div><div class="sec-empty">Importar maestro .xlsx, conciliación y plantilla MP: en preparación (Fase 2).</div></div>' +
+        '<div class="sec"><div class="sec-h">Maestro y conciliación</div>' +
+          '<div id="cfgConf" class="notice">' + esc(conflStatusText()) + '</div>' +
+          '<div class="dacts"><button class="dact" data-act="cfg-maestro">Importar maestro (.xlsx)</button><button class="dact" data-act="cfg-conf">Ver conflictos</button></div></div>' +
+        '<div class="sec"><div class="sec-h">Plantilla de asignación MP</div>' +
+          '<div class="grid-2"><div class="fld"><label>Mes</label><select id="cfgMes">' + MES.map(function (m, i) { return '<option value="' + i + '"' + (i === NOW ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></div>' +
+            '<div class="fld"><label>Año</label><select id="cfgAno">' + [YEAR + 1, YEAR, YEAR - 1, YEAR - 2].map(function (y) { return '<option' + (y === YEAR ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></div></div>' +
+          '<div class="dacts"><button class="dact" data-act="cfg-plantilla-dl">Descargar plantilla</button><button class="dact" data-act="cfg-plantilla-up">Subir asignaciones</button></div></div>' +
       '</div><div class="d-foot"><button class="savebtn" data-x>Cerrar</button></div>';
     drawer.onclick = function (ev) {
       var t = ev.target.closest('[data-x],[data-act]'); if (!t) return;
@@ -2929,8 +2936,96 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       if (act === 'cfg-dedup') { if (H.consolidarMPDuplicadas) H.consolidarMPDuplicadas(); H.save(); toast('MP duplicadas consolidadas'); return; }
       if (act === 'cfg-normtipos') { if (H.normalizarTiposEvento) H.normalizarTiposEvento(); H.save(); toast('Tipos de evento normalizados'); return; }
       if (act === 'cfg-ciclos') { if (H.reconstruirCiclos) H.reconstruirCiclos(); H.save(); toast('Ciclos reconstruidos'); return; }
+      if (act === 'cfg-maestro') { importarMaestro(); return; }
+      if (act === 'cfg-conf') { paintConflictos(); return; }
+      if (act === 'cfg-plantilla-dl') { descargarPlantilla(+el('#cfgAno').value, +el('#cfgMes').value); return; }
+      if (act === 'cfg-plantilla-up') { subirPlantilla(+el('#cfgAno').value, +el('#cfgMes').value); return; }
     };
     openDrawer();
+  }
+
+  /* ---------------------- Maestro / conciliación / plantilla (Fase 2) ---------------------- */
+  function dlBlob(blob, name) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 0); }
+  function pendConflictos() { return (H.getState().conflictos || []).filter(function (c) { return c.estado === 'pendiente' || c.estado === 'pospuesto'; }); }
+  function conflStatusText() { var n = pendConflictos().length; return n ? (n + ' conflicto(s) pendiente(s) de conciliación.') : 'Sin conflictos pendientes.'; }
+  function refreshConfChip() { var n = pendConflictos().length; var b = el('#confChip'); if (b) { b.style.display = n ? '' : 'none'; b.textContent = '⚠ ' + n + ' conciliar'; } }
+
+  function importarMaestro() {
+    if (!window.XLSX) return toast('XLSX no disponible (sin conexión)', 'warn');
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xlsm,.xls'; inp.style.display = 'none';
+    inp.onchange = function (e) {
+      var f = e.target.files[0]; if (!f) return; toast('Procesando maestro…');
+      var S = H.getState(); var impId = S.counters.importacion++; (S.importaciones = S.importaciones || []).push({ id: impId, fecha: new Date().toISOString(), archivo: f.name, resueltos: 0 });
+      H.parsearMaestro(f).then(function (parsed) {
+        var res = H.compararMaestro(parsed, impId); H.save();
+        toast('Maestro conciliado · ' + (res.oficializados || 0) + ' oficializadas · ' + (res.eventosSinteticos || 0) + ' importadas · ' + (res.autoCompletados || 0) + ' auto · ' + (res.conflictos || 0) + ' conflictos');
+        if (pendConflictos().length) paintConflictos(); else paintConfig();
+        render();
+      }).catch(function (err) { toast('Error: ' + err.message, 'warn'); });
+      setTimeout(function () { inp.remove(); }, 1000);
+    };
+    document.body.appendChild(inp); inp.click();
+  }
+
+  function paintConflictos() {
+    drawerMode = 'conflictos'; curInv = null; clearSel();
+    var pend = pendConflictos();
+    var rows = pend.length ? pend.map(function (c) {
+      var label = H.nombreCampoConflicto ? H.nombreCampoConflicto(c) : (c.campo || c.tipo);
+      var vals = c.tipo === 'mp_diferencia'
+        ? '<div class="tl-s"><span class="spill warn">Programa: ' + esc(c.valorPrograma || '∅') + '</span> &nbsp; <span class="spill op">Maestro: ' + esc(c.valorMaestro || '∅') + '</span></div>'
+        : '<div class="tl-s">' + (c.tipo === 'equipo_nuevo' ? 'Equipo nuevo en el maestro' : 'Equipo del programa ausente en el maestro') + '</div>';
+      var manual = c.tipo === 'mp_diferencia' ? '<button class="mini" data-cf="manual" data-id="' + c.id + '">Manual</button>' : '';
+      return '<div class="tl-item"><div class="tl-main"><div class="tl-t">' + esc(c.inv || '') + (c.equipo ? ' · ' + esc(c.equipo) : '') + ' · ' + esc(label) + '</div>' + vals + '</div>' +
+        '<div class="tl-acts"><button class="mini" data-cf="aceptar_maestro" data-id="' + c.id + '">Maestro</button><button class="mini" data-cf="mantener_programa" data-id="' + c.id + '">Programa</button>' + manual + '<button class="mini" data-cf="posponer" data-id="' + c.id + '">Posponer</button></div></div>';
+    }).join('') : '<div class="sec-empty">No hay conflictos pendientes. 🎉</div>';
+    drawer.innerHTML =
+      '<div class="d-head"><button class="d-close" data-x>✕</button><div class="d-fam">SIGEM · Conciliación</div><div class="d-name">Conflictos (' + pend.length + ')</div><div class="d-mm">Diferencias con el maestro Excel</div></div>' +
+      '<div class="d-body">' +
+        (pend.length ? '<div class="dacts"><button class="dact primary" data-cfall="aceptar_maestro">Aceptar todo (maestro)</button><button class="dact" data-cfall="mantener_programa">Mantener todo (programa)</button></div>' : '') +
+        '<div class="tl">' + rows + '</div></div>' +
+      '<div class="d-foot"><button class="savebtn" data-cfg>Volver a Configuración</button><button class="cancel" data-x>Cerrar</button></div>';
+    drawer.onclick = function (ev) {
+      var t = ev.target.closest('[data-x],[data-cfg],[data-cf],[data-cfall]'); if (!t) return;
+      if (t.hasAttribute('data-x')) return closeDrawer();
+      if (t.hasAttribute('data-cfg')) return paintConfig();
+      if (t.hasAttribute('data-cfall')) { var acc = t.getAttribute('data-cfall'); pendConflictos().forEach(function (c) { H.resolverConflicto(c, acc); }); toast('Conflictos resueltos'); paintConflictos(); render(); return; }
+      if (t.hasAttribute('data-cf')) {
+        var acc2 = t.getAttribute('data-cf'), id = t.getAttribute('data-id');
+        var c = (H.getState().conflictos || []).find(function (x) { return String(x.id) === id; }); if (!c) return;
+        var vm = null; if (acc2 === 'manual') { vm = window.prompt('Valor manual:', c.valorMaestro || ''); if (vm == null) return; }
+        H.resolverConflicto(c, acc2, vm); toast('Conflicto resuelto'); paintConflictos(); render(); return;
+      }
+    };
+    openDrawer();
+  }
+
+  function descargarPlantilla(y, m) {
+    if (!window.XLSX) return toast('XLSX no disponible', 'warn');
+    var d = H.construirAsignacionMP(y, m);
+    if (!d.rows.length) return toast('Sin equipos programados en ' + (MES_FULL[MES[m]] || MES[m]) + ' ' + y, 'warn');
+    var X = window.XLSX, wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([d.header].concat(d.rows)), 'Asignación');
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([['Responsable oficial']].concat(EJEC.map(function (e) { return [e]; }))), 'Responsables_oficiales');
+    dlBlob(new Blob([X.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/octet-stream' }), 'Plantilla_' + (MES_FULL[MES[m]] || MES[m]) + '_' + y + '.xlsx');
+    toast('Plantilla: ' + d.rows.length + ' equipos');
+  }
+  function subirPlantilla(y, m) {
+    if (!window.XLSX) return toast('XLSX no disponible', 'warn');
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls'; inp.style.display = 'none';
+    inp.onchange = function (e) {
+      var f = e.target.files[0]; if (!f) return;
+      f.arrayBuffer().then(function (buf) {
+        var X = window.XLSX, wb = X.read(buf, { type: 'array' });
+        var hoja = wb.SheetNames.find(function (n) { return /asignaci/i.test(n); }) || wb.SheetNames[0];
+        var rows = X.utils.sheet_to_json(wb.Sheets[hoja], { header: 1, defval: null, blankrows: false });
+        var r = H.procesarPlantillaMP(rows, y, m);
+        if (!r.ok) return toast(r.error, 'warn');
+        toast(r.cargadas + ' asignaciones cargadas en ' + r.mes + ' ' + r.year);
+      }).catch(function (err) { toast('Error: ' + err.message, 'warn'); });
+      setTimeout(function () { inp.remove(); }, 1000);
+    };
+    document.body.appendChild(inp); inp.click();
   }
 
   /* ------------------------------ toast --------------------------------- */
@@ -2969,6 +3064,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         '<input id="q" type="search" placeholder="Buscar equipo, N° inventario, marca, serie, ubicación…" autocomplete="off"></label>' +
         '<select class="sel" id="fFam"></select><select class="sel" id="fEstado"></select><select class="sel" id="fFrec"></select><select class="sel" id="fYear"></select>' +
         '<button class="tbtn" id="toggleAll">Contraer todo</button>' +
+        '<button class="tbtn" id="confChip" style="display:none;border-color:var(--warn);color:var(--warn)"></button>' +
         '<span class="count-chip"><b id="countN">0</b> equipos</span>' +
       '</div></header>' +
       '<div class="grid-wrap"><table><thead><tr id="thRow"></tr></thead><tbody id="tb"></tbody></table>' +
