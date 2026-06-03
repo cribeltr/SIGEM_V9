@@ -57,6 +57,7 @@ setTimeout(() => {
     ok('ficha con calendario MP (12 meses)', drawer.querySelectorAll('#mpcal .mpc').length === 12);
     ok('ficha con secciones (bitácora/pendientes/ciclos)', drawer.querySelectorAll('.sec').length >= 4);
     ok('ficha con acciones', drawer.querySelectorAll('.dacts .dact').length >= 4);
+    ok('ficha con sección Archivos (Drive)', !!drawer.querySelector('#dvFiles'));
 
     // 4) Abrir el formulario de MP desde una celda del calendario
     click(drawer.querySelector('#mpcal .mpc'));
@@ -105,6 +106,19 @@ setTimeout(() => {
     ok('Auditoría: tabla de cambios', !!d.querySelector('#altScreen table.cmp-table'));
     click(d.querySelector('#moreBtn')); click(d.querySelector('.more-item[data-screen="gantt"]'));
     ok('vuelve a la Gantt (grid visible)', d.querySelector('#ganttScreen').style.display !== 'none' && d.querySelectorAll('#tb tr.row').length > 0);
+
+    // 11) Selección múltiple + barra de acciones
+    ok('botón Exportar presente', !!d.querySelector('#expGantt'));
+    var chk = d.querySelector('#tb tr.row .rowchk');
+    if (chk) { click(chk); ok('selección muestra barra en lote', d.querySelector('#bulkBar').style.display !== 'none' && !!d.querySelector('#bulkEnc')); click(d.querySelector('#bulkClear')); ok('limpiar oculta la barra', d.querySelector('#bulkBar').style.display === 'none'); }
+
+    // 12) Command palette (⌘K)
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+    ok('⌘K abre command palette', d.querySelector('#cmdk').style.display !== 'none');
+    var ci = d.querySelector('#cmdkIn'); ci.value = 'cumpl'; ci.dispatchEvent(new w.Event('input', { bubbles: true }));
+    ok('palette filtra (acción Cumplimiento)', [...d.querySelectorAll('#cmdkList .cmdk-item')].some(x => /Cumplimiento/.test(x.textContent)));
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    ok('Esc cierra palette', d.querySelector('#cmdk').style.display === 'none');
 
     ok('sin errores de runtime en las interacciones', errs.length === errBefore);
     ok('sin errores de runtime (global)', errs.length === 0);

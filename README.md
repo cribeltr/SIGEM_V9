@@ -48,17 +48,22 @@ KPIs, filtros y panel lateral. Usa los datos reales (estado recalculado,
 
 - clic en una celda **registra/corrige la MP** (Si/C1–C8/FS/NU/Baja) con recálculo;
 - el panel del equipo da acceso a bitácora (oficializar/anular/editar), pendientes,
-  ciclos, baja, encargado, notas y gestión, y a **Nuevo evento** con los campos por
-  tipo (Solicitud/Visita/OC/Envío/Recepción/Reparación/MP);
+  ciclos, baja, encargado, notas, gestión, **adjuntos en Google Drive** (al abrir
+  desde Apps Script), y a **Nuevo evento** con los campos por tipo
+  (Solicitud/Visita/OC/Envío/Recepción/Reparación/MP);
+- **selección múltiple** en la matriz (casilla por fila) → **asignar encargado** o
+  **registrar MP en lote**, y **Exportar** la vista filtrada o la selección a Excel;
+- **búsqueda global / paleta de comandos** (`⌘K` o `/`) y atajos (`j`/`k` mover,
+  `Enter` abrir, `Esc` cerrar); **recordatorios al abrir** (vencidos / para hoy);
 - **Configuración** (⚙): sincronización con **Google Sheets** (Apps Script y HTTP),
   respaldo JSON, mantenimiento de datos, **importar maestro `.xlsx` + conciliación**
   (resolver conflictos: maestro/programa/manual/posponer) y **plantilla de asignación
   MP** (descargar/subir). Aparece un indicador "⚠ conciliar" cuando hay conflictos.
-- menú **"Más" (▾)**: **Tablero** (kanban: por estado / pendientes / correctivos por
-  etapa; **arrastrar y soltar** tarjetas entre columnas —registra el evento o cambia
-  el estado del pendiente— o clic para abrir la ficha) y **Cumplimiento** (por
-  servicio / responsable / mes + tendencia mensual y **exportar a Excel**). También
-  un acceso a la app clásica.
+- menú **"Más" (▾)**: **Mi día** (cola de trabajo: alertas accionables + pendientes
+  priorizados con regla de 3 días), **Tablero** (kanban: por estado / pendientes /
+  correctivos por etapa; **arrastrar y soltar** entre columnas o clic para abrir),
+  **Cumplimiento** (por servicio / responsable / mes + tendencia + **exportar**),
+  **Contactos** y **Auditoría** (historial de cambios). También acceso a la app clásica.
 
 Fuentes editables: `ui/gantt.css` y `ui/gantt-app.js` (dev: `ui/gantt.html`).
 

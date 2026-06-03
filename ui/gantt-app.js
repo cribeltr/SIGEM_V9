@@ -161,6 +161,7 @@
   var drawerMode = null, curInv = null;
   var screen = 'gantt';
   var tbMode = 'estado', cmpMode = 'servicio', cmpY = null, cmpM = null;
+  var selInv = {};
 
   // poblar selects
   el('#fFam').innerHTML = '<option value="">Todas las familias</option>' + uniqueFams().map(function (f) { return '<option>' + esc(f) + '</option>'; }).join('');
@@ -260,7 +261,7 @@
         var srv = e.servicio ? '<span class="srv-name">' + esc(e.servicio) + '</span>' : '<span class="srv-name" style="color:var(--faint)">—</span>';
         var sub = (e.unidad || e.ubic) ? '<span class="srv-sub">' + esc(e.unidad || e.ubic) + '</span>' : '';
         html += '<tr class="row" data-inv="' + esc(e.inv) + '">' +
-          '<td class="c-eq"><div class="eq-cell"><span class="eq-dot" style="background:var(' + st.c + ')"></span><div class="eq-meta">' +
+          '<td class="c-eq"><div class="eq-cell"><input type="checkbox" class="rowchk" data-inv="' + esc(e.inv) + '"' + (selInv[e.inv] ? ' checked' : '') + '><span class="eq-dot" style="background:var(' + st.c + ')"></span><div class="eq-meta">' +
           '<div class="eq-name">' + esc(e.equipo || '—') + '</div><div class="eq-sub">' + esc(e.inv || 's/inv') + (e.marca ? ' · ' + esc(e.marca) : '') + '</div></div></div></td>' +
           '<td class="c-srv">' + srv + sub + '</td>' + cells +
           '<td class="sum' + (c.prog ? '' : ' z') + '">' + (c.prog || '·') + '</td><td class="sum' + (c.done ? '' : ' z') + '">' + (c.done || '·') + '</td></tr>';
@@ -354,6 +355,7 @@
         '<div class="sec"><div class="sec-h">Bitácora</div><div class="tl">' + evHtml + '</div></div>' +
         '<div class="sec"><div class="sec-h">Pendientes</div><div class="tl">' + pendHtml + '</div></div>' +
         '<div class="sec"><div class="sec-h">Ciclos correctivos</div><div class="tl">' + cicHtml + '</div></div>' +
+        '<div class="sec"><div class="sec-h">Archivos (Drive)</div><div id="dvFiles" class="tl">' + (isGAS() ? '<div class="sec-empty">Cargando archivos…</div>' : '<div class="sec-empty">Disponible al abrir SIGEM desde Apps Script (Google Drive).</div>') + '</div>' + (isGAS() ? '<div class="addrow"><input type="file" id="dvFile" style="flex:1"><button class="add" data-act="dv-up" title="Subir a Drive">↑</button></div>' : '') + '</div>' +
         '<div class="sec"><div class="sec-h">Datos y ubicación <span class="tag">editable</span></div>' +
           '<div class="facts"><div><label class="fl">Servicio</label><input class="f-in" id="gSrv" value="' + esc(e.servicio) + '"></div>' +
             '<div><label class="fl">Unidad</label><input class="f-in" id="gUni" value="' + esc(e.unidad) + '"></div>' +
@@ -366,7 +368,7 @@
       '</div>' +
       '<div class="d-foot"><button class="savebtn" data-act="close">Cerrar</button></div>';
 
-    openDrawer(); selectRow(e.inv); wireEquipo(e);
+    openDrawer(); selectRow(e.inv); wireEquipo(e); if (isGAS()) loadDriveFiles(e.inv);
   }
 
   function normEstado(s) { return String(s || '').replace(/ /g, '_'); }
@@ -413,10 +415,19 @@
         H.asignarEncargado(e, el('#gEnc').value || null); H.save(); toast('Datos actualizados'); return;
       }
       if (act === 'add-nota') { var txt = el('#notaTxt').value; if (txt && txt.trim()) { H.agregarNotaEquipo(e, txt); H.save(); toast('Nota agregada'); } return; }
+      if (act === 'dv-up') { var fi = el('#dvFile'), f = fi && fi.files[0]; if (!f) return toast('Elige un archivo', 'warn'); var rd = new FileReader(); rd.onload = function () { var b64 = String(rd.result).split(',')[1] || ''; gasCall('apiSubirArchivo', { inv: e.inv, nombre: f.name, mime: f.type || 'application/octet-stream', dataB64: b64 }).then(function (r) { toast(r && r.ok ? 'Archivo subido a Drive' : 'No se pudo subir', r && r.ok ? '' : 'warn'); loadDriveFiles(e.inv); }).catch(function (err) { toast('Drive: ' + err.message, 'warn'); }); }; rd.readAsDataURL(f); return; }
+      if (act === 'dv-del') { if (!window.confirm('¿Eliminar este archivo de Drive?')) return; gasCall('apiEliminarArchivo', { id: t.getAttribute('data-fid') }).then(function () { toast('Archivo eliminado'); loadDriveFiles(e.inv); }).catch(function (err) { toast('Drive: ' + err.message, 'warn'); }); return; }
     };
   }
   function findEv(id) { return (H.getState().eventos || []).find(function (x) { return String(x.id) === String(id); }); }
   function findPend(id) { return (H.getState().pendientes || []).find(function (x) { return String(x.id) === String(id); }); }
+  function loadDriveFiles(inv) {
+    if (!isGAS()) return; var box = el('#dvFiles'); if (!box) return;
+    gasCall('apiArchivosDe', inv).then(function (r) {
+      var b = el('#dvFiles'); if (!b) return; var arr = (r && r.archivos) || [];
+      b.innerHTML = arr.length ? arr.map(function (a) { return '<div class="tl-item"><div class="tl-main"><div class="tl-t"><a href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(a.name) + '</a></div><div class="tl-s">' + esc(H.fmtFecha((a.fecha || '').slice(0, 10))) + (a.size ? ' · ' + Math.round(a.size / 1024) + ' KB' : '') + '</div></div><div class="tl-acts"><button class="mini danger" data-act="dv-del" data-fid="' + esc(a.id) + '">Eliminar</button></div></div>'; }).join('') : '<div class="sec-empty">Sin archivos.</div>';
+    }).catch(function (err) { var b = el('#dvFiles'); if (b) b.innerHTML = '<div class="sec-empty">Drive no disponible: ' + esc(err.message) + '</div>'; });
+  }
 
   // ---- sub-formulario: registrar / corregir MP ----
   function paintMP(e, i, onDone) {
@@ -592,6 +603,10 @@
   el('#moreBtn').onclick = function (e) { e.stopPropagation(); el('#moreMenu').classList.toggle('on'); };
   el('#moreMenu').onclick = function (e) { var b = e.target.closest('.more-item[data-screen]'); if (b) showScreen(b.getAttribute('data-screen')); };
   document.addEventListener('click', function (e) { if (!e.target.closest('#moreWrap')) closeMore(); });
+  el('#expGantt').onclick = function () { exportEquipos(null); };
+  el('#cmdkIn').oninput = function (e) { cmdkFilter(e.target.value); };
+  el('#cmdkList').onclick = function (e) { var it = e.target.closest('.cmdk-item'); if (it) cmdkRun(+it.getAttribute('data-i')); };
+  el('#cmdk').onclick = function (e) { if (e.target === el('#cmdk')) closeCmdk(); };
   el('#expBtn').onclick = function () {
     var blob = new Blob([H.exportarBackupJSON()], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sigem-backup-' + H.hoyLocal() + '.json'; a.click();
@@ -606,6 +621,8 @@
 
   // delegación principal de la grilla
   tb.addEventListener('click', function (ev) {
+    var chk = ev.target.closest('.rowchk');
+    if (chk) { ev.stopPropagation(); var iv = chk.getAttribute('data-inv'); if (chk.checked) selInv[iv] = 1; else delete selInv[iv]; refreshBulk(); return; }
     var grp = ev.target.closest('tr.grp');
     if (grp) { var f = grp.getAttribute('data-fam'); if (collapsed[f]) delete collapsed[f]; else collapsed[f] = 1; renderGrid(); return; }
     var row = ev.target.closest('tr.row'); if (!row) return;
@@ -615,7 +632,21 @@
     paintEquipo(e);
   });
   scrim.addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { if (drawer.classList.contains('on')) closeDrawer(); legend.classList.remove('on'); closeMore(); } });
+  document.addEventListener('keydown', function (ev) {
+    var inField = /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName);
+    if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'k' || ev.key === 'K')) { ev.preventDefault(); cmdkIsOpen() ? closeCmdk() : openCmdk(); return; }
+    if (cmdkIsOpen()) {
+      if (ev.key === 'Escape') closeCmdk();
+      else if (ev.key === 'ArrowDown') { ev.preventDefault(); cmdkIdx = Math.min(cmdkIdx + 1, cmdkItems.length - 1); renderCmdk(); }
+      else if (ev.key === 'ArrowUp') { ev.preventDefault(); cmdkIdx = Math.max(cmdkIdx - 1, 0); renderCmdk(); }
+      else if (ev.key === 'Enter') { ev.preventDefault(); cmdkRun(cmdkIdx); }
+      return;
+    }
+    if (ev.key === '/' && !inField && !drawer.classList.contains('on')) { ev.preventDefault(); openCmdk(); return; }
+    if (ev.key === 'Escape') { if (drawer.classList.contains('on')) closeDrawer(); legend.classList.remove('on'); closeMore(); return; }
+    if ((ev.key === 'j' || ev.key === 'k') && screen === 'gantt' && !inField && !drawer.classList.contains('on')) { navGrid(ev.key === 'j' ? 1 : -1); }
+    else if (ev.key === 'Enter' && screen === 'gantt' && !inField && !drawer.classList.contains('on')) { var r = tb.querySelector('tr.row.kb-focus'); if (r) { var eq = H.findEquipo(r.getAttribute('data-inv')); if (eq) paintEquipo(eq); } }
+  });
 
   /* --------------------------- Configuración ---------------------------- */
   function cloudStatusText() { return Cloud.connected ? ('Almacén activo' + (Cloud.gas ? ' (Apps Script)' : '') + (Cloud.lastSync ? ' · última sincronización: ' + new Date(Cloud.lastSync).toLocaleString('es-CL') : ' · sin sincronizar aún')) : 'Sin conectar a Google Sheets (los datos viven en este navegador).'; }
@@ -1077,6 +1108,73 @@
       '<div style="overflow:auto;max-width:100%"><table class="cmp-table"><thead><tr><th class="l">Fecha / hora</th><th class="l">Entidad</th><th class="l">Campo</th><th class="l">Antes</th><th class="l">Después</th><th class="l">Usuario</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
 
+  /* ----- Exportar / selección múltiple (Equipos) ----- */
+  function exportEquipos(invs) {
+    if (!window.XLSX) return toast('XLSX no disponible', 'warn');
+    var src = invs ? invs.map(function (i) { return H.findEquipo(i); }).filter(Boolean) : eqs().filter(matches);
+    if (!src.length) return toast('Sin equipos para exportar', 'warn');
+    var header = ['N° Inv.', 'Equipo', 'Servicio', 'Unidad', 'Ubicación', 'Marca', 'Modelo', 'Serie', 'Año', 'Frecuencia', 'Estado'].concat(MES).concat(['PMP', 'MP-R']);
+    var rows = src.map(function (e) {
+      var base = [e.inv, e.equipo || '', e.servicio || '', e.unidad || '', e.ubic || '', e.marca || '', e.modelo || '', e.serie || '', e.ano || '', e.freq || '', ESTADO_LABEL[e.estado] || e.estado];
+      var cells = []; for (var i = 0; i < 12; i++) { var res = H.resultadoMPMes(e, YEAR, i); cells.push(res || ((e.prog || {})[MES[i]] || '')); }
+      var c = mpCounts(e); return base.concat(cells).concat([c.prog, c.done]);
+    });
+    var X = window.XLSX, wb = X.utils.book_new(); X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([header].concat(rows)), 'Equipos');
+    dlBlob(new Blob([X.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/octet-stream' }), 'Equipos_' + (invs ? 'seleccion' : 'filtrado') + '_' + YEAR + '.xlsx');
+    toast((invs ? 'Selección' : 'Vista') + ' exportada · ' + src.length + ' equipos');
+  }
+  function selKeys() { return Object.keys(selInv).filter(function (k) { return selInv[k]; }); }
+  function refreshBulk() {
+    var bar = el('#bulkBar'); if (!bar) return; var keys = selKeys(), n = keys.length;
+    if (!n) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    bar.style.display = '';
+    bar.innerHTML = '<b>' + n + ' seleccionado(s)</b><select class="sel" id="bulkEnc"><option value="">Asignar encargado…</option>' + EJEC.map(function (e) { return '<option>' + esc(e) + '</option>'; }).join('') + '</select>' +
+      '<button class="tbtn" id="bulkMP">Registrar MP…</button><button class="tbtn" id="bulkExp">Exportar selección</button><button class="tbtn" id="bulkClear">Limpiar</button>';
+    el('#bulkEnc').onchange = function (e) { var v = e.target.value; if (!v) return; keys.forEach(function (inv) { var eq = H.findEquipo(inv); if (eq) H.asignarEncargado(eq, v); }); H.save(); toast('Encargado asignado a ' + n + ' equipos'); selInv = {}; renderGrid(); refreshBulk(); };
+    el('#bulkMP').onclick = function () { paintMPMasiva(keys); };
+    el('#bulkExp').onclick = function () { exportEquipos(keys); };
+    el('#bulkClear').onclick = function () { selInv = {}; renderGrid(); refreshBulk(); };
+  }
+  function paintMPMasiva(invs) {
+    drawerMode = 'mpmasiva'; curInv = null;
+    drawer.innerHTML = '<div class="d-head"><button class="d-close" data-x>✕</button><div class="d-fam">SIGEM</div><div class="d-name">Registrar MP en lote</div><div class="d-mm">' + invs.length + ' equipos seleccionados</div></div>' +
+      '<div class="d-body"><div class="grid-2">' + fld('Fecha', '<input type="date" id="bmFecha" value="' + esc(H.hoyLocal()) + '">') + fld('Resultado', '<select id="bmRes">' + opt(RES_MP, 'Si') + '</select>') + '</div>' +
+      fld('Ejecutor', ejecSel('bmEjec', '')) + fld('Estado (si "Si")', '<select id="bmEstado">' + opt([['operativo', 'Operativo'], ['no operativo', 'No operativo']], 'operativo') + '</select>') +
+      fld('Observación', '<textarea id="bmObs"></textarea>') + '<div class="notice">Se omiten equipos que ya tengan una MP registrada ese mes.</div></div>' +
+      '<div class="d-foot"><button class="savebtn" data-save>Registrar en ' + invs.length + '</button><button class="cancel" data-x>Cancelar</button></div>';
+    var xs = drawer.querySelectorAll('[data-x]'); for (var i = 0; i < xs.length; i++) xs[i].onclick = closeDrawer;
+    drawer.querySelector('[data-save]').onclick = function () {
+      var r = H.registrarMPMasiva({ invs: invs, fecha: el('#bmFecha').value, resultado: el('#bmRes').value, ejecutor: el('#bmEjec').value, estadoSi: el('#bmEstado').value, obs: el('#bmObs').value, omitirDuplicados: true });
+      if (!r.ok) return toast(r.error || 'No se pudo', 'warn');
+      toast('MP en lote · ' + (r.creados || 0) + ' creadas · ' + (r.omitidos || 0) + ' omitidas'); selInv = {}; closeDrawer(); renderGrid(); refreshBulk();
+    };
+    openDrawer();
+  }
+
+  /* ----- Command palette (⌘K) + navegación de teclado ----- */
+  var cmdkItems = [], cmdkIdx = 0;
+  function cmdkIsOpen() { var o = el('#cmdk'); return o && o.style.display !== 'none'; }
+  function openCmdk() { var o = el('#cmdk'); o.style.display = 'flex'; var i = el('#cmdkIn'); i.value = ''; cmdkFilter(''); i.focus(); }
+  function closeCmdk() { var o = el('#cmdk'); if (o) o.style.display = 'none'; }
+  function cmdkFilter(q) {
+    q = norm(q); var items = [];
+    [['Mi día', function () { showScreen('midia'); }], ['Carta Gantt', function () { showScreen('gantt'); }], ['Tablero', function () { showScreen('tablero'); }], ['Cumplimiento', function () { showScreen('cumplimiento'); }], ['Contactos', function () { showScreen('contactos'); }], ['Auditoría', function () { showScreen('auditoria'); }], ['Configuración', function () { paintConfig(); }], ['Conciliación', function () { paintConflictos(); }]]
+      .forEach(function (a) { if (!q || norm(a[0]).indexOf(q) >= 0) items.push({ label: '▸ ' + a[0], run: a[1] }); });
+    if (q) eqs().filter(function (e) { return norm([e.inv, e.equipo, e.serie, e.marca, e.servicio].join(' ')).indexOf(q) >= 0; }).slice(0, 20).forEach(function (e) { items.push({ label: e.inv + ' · ' + (e.equipo || '') + ' — ' + (e.servicio || ''), run: function () { showScreen('gantt'); paintEquipo(e); } }); });
+    cmdkItems = items; cmdkIdx = 0; renderCmdk();
+  }
+  function renderCmdk() { var l = el('#cmdkList'); if (!l) return; l.innerHTML = cmdkItems.length ? cmdkItems.map(function (it, i) { return '<div class="cmdk-item' + (i === cmdkIdx ? ' on' : '') + '" data-i="' + i + '">' + esc(it.label) + '</div>'; }).join('') : '<div class="cmdk-empty">Sin resultados</div>'; }
+  function cmdkRun(i) { var it = cmdkItems[i]; if (it) { closeCmdk(); it.run(); } }
+  function navGrid(dir) { var rows = tb.querySelectorAll('tr.row'); if (!rows.length) return; var cur = -1, i; for (i = 0; i < rows.length; i++) if (rows[i].classList.contains('kb-focus')) cur = i; var ni = Math.max(0, Math.min(cur < 0 ? 0 : cur + dir, rows.length - 1)); for (i = 0; i < rows.length; i++) rows[i].classList.remove('kb-focus'); rows[ni].classList.add('kb-focus'); rows[ni].scrollIntoView({ block: 'nearest' }); }
+
+  /* ----- Recordatorios al abrir ----- */
+  function avisosIniciales() {
+    var S = H.getState(), hoy = H.hoyLocal(), pend = (S.pendientes || []).filter(function (p) { return !p.anulado && p.estado !== 'cerrado'; });
+    var venc = pend.filter(function (p) { return p.fechaComp && p.fechaComp < hoy; }).length;
+    var rec = pend.filter(function (p) { return p.proxRecord && p.proxRecord <= hoy; }).length;
+    if (venc || rec) toast((venc ? venc + ' pendiente(s) vencido(s)' : '') + (venc && rec ? ' · ' : '') + (rec ? rec + ' recordatorio(s) para hoy' : '') + ' — abre "Mi día"', 'warn');
+  }
+
   /* ------------------------------ toast --------------------------------- */
   var tt;
   function toast(msg, cls) { var t = el('#toast'); if (!t) return; t.textContent = msg; t.className = 'toast on' + (cls ? ' ' + cls : ''); clearTimeout(tt); tt = setTimeout(function () { t.classList.remove('on'); }, 2600); }
@@ -1091,6 +1189,7 @@
   if (Cloud.connected && Cloud.auto) {
     Cloud.pull().then(function (r) { if (r && !r.empty) { render(); toast('Datos sincronizados desde Google Sheets'); } refreshCloudChip(); }).catch(function () {});
   }
+  setTimeout(avisosIniciales, 700);
 
   /* --------------------------- markup del shell ------------------------- */
   function skeleton() {
@@ -1124,9 +1223,11 @@
         '<input id="q" type="search" placeholder="Buscar equipo, N° inventario, marca, serie, ubicación…" autocomplete="off"></label>' +
         '<select class="sel" id="fFam"></select><select class="sel" id="fEstado"></select><select class="sel" id="fFrec"></select><select class="sel" id="fYear"></select>' +
         '<button class="tbtn" id="toggleAll">Contraer todo</button>' +
+        '<button class="tbtn" id="expGantt" title="Exportar la vista filtrada a Excel">Exportar</button>' +
         '<button class="tbtn" id="confChip" style="display:none;border-color:var(--warn);color:var(--warn)"></button>' +
         '<span class="count-chip"><b id="countN">0</b> equipos</span>' +
-      '</div></header>' +
+      '</div>' +
+      '<div id="bulkBar" class="bulkbar" style="display:none"></div></header>' +
       '<div class="grid-wrap">' +
         '<div id="ganttScreen"><table><thead><tr id="thRow"></tr></thead><tbody id="tb"></tbody></table>' +
           '<div class="empty" id="empty" style="display:none">Sin resultados para el filtro actual.</div></div>' +
@@ -1149,6 +1250,7 @@
       '</div>' +
       '<div class="scrim" id="scrim"></div>' +
       '<aside class="drawer" id="drawer" aria-hidden="true"></aside>' +
-      '<div class="toast" id="toast"></div>';
+      '<div class="toast" id="toast"></div>' +
+      '<div class="cmdk" id="cmdk" style="display:none"><div class="cmdk-box"><input id="cmdkIn" type="text" placeholder="Buscar equipo o acción…  ( ⌘K / Esc )" autocomplete="off"><div class="cmdk-list" id="cmdkList"></div></div></div>';
   }
 })();
