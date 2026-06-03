@@ -64,12 +64,11 @@
     push: function () {
       if (!window.LZString) return Promise.resolve();
       var self = this, dataB64 = window.LZString.compressToBase64(H.exportarBackupJSON());
-      var done = function (j) { if (j && j.ok === false) throw new Error(j.error || 'error al guardar'); self._markSync(); return { ok: true }; };
-      // Fase 1: se sincroniza el ESTADO (dataB64). Las hojas legibles del libro se
-      // regeneran en una fase próxima; al omitir 'sheets', Code.gs las deja intactas.
-      if (isGAS()) return gasCall('apiSave', { dataB64: dataB64 }).then(done);
+      var sheets = cuadernoSheets();   // regenera las hojas legibles del libro (incl. Registro)
+      var done = function (j) { if (j && j.ok === false) throw new Error(j.error || 'error al guardar'); self._markSync(); return { ok: true, hojas: sheets.length }; };
+      if (isGAS()) return gasCall('apiSave', { dataB64: dataB64, sheets: sheets }).then(done);
       if (!this.url) return Promise.resolve();
-      return fetch(this.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: this.token, dataB64: dataB64 }), redirect: 'follow' }).then(function (r) { return r.json().catch(function () { return { ok: true }; }); }).then(done);
+      return fetch(this.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: this.token, dataB64: dataB64, sheets: sheets }), redirect: 'follow' }).then(function (r) { return r.json().catch(function () { return { ok: true }; }); }).then(done);
     }
   };
   function scheduleCloudPush() {
@@ -468,14 +467,14 @@
     opts = opts || {}; drawerMode = 'evento';
     var tipo = opts.tipo || 'Solicitud de trabajo';
     function fieldsFor(tp) {
-      var spec = EV_SPEC[tp] || { fields: [] };
+      var spec = EV_SPEC[tp] || { fields: [] }, pre = opts.preset || {};
       var html = fld('Fecha', '<input type="date" id="ev_fecha" value="' + esc(opts.fecha || H.hoyLocal()) + '">');
       spec.fields.forEach(function (f) {
-        var key = f[0], lab = f[1], ty = f[2], id = 'ev_' + key;
-        if (ty === 'ejec') html += fld(lab, ejecSel(id, ''));
-        else if (Array.isArray(ty) && typeof ty[0] === 'string' && ty[0].indexOf(':') >= 0) html += fld(lab, '<select id="' + id + '">' + ty.map(function (o) { var p = o.split(':'); return '<option value="' + esc(p[0]) + '">' + esc(p[1] || p[0]) + '</option>'; }).join('') + '</select>');
-        else if (Array.isArray(ty)) html += fld(lab, '<select id="' + id + '">' + opt(ty, '') + '</select>');
-        else html += fld(lab, '<input type="text" id="' + id + '">');
+        var key = f[0], lab = f[1], ty = f[2], id = 'ev_' + key, pv = pre[key];
+        if (ty === 'ejec') html += fld(lab, ejecSel(id, pv || ''));
+        else if (Array.isArray(ty) && typeof ty[0] === 'string' && ty[0].indexOf(':') >= 0) html += fld(lab, '<select id="' + id + '">' + ty.map(function (o) { var p = o.split(':'); return '<option value="' + esc(p[0]) + '"' + (p[0] === pv ? ' selected' : '') + '>' + esc(p[1] || p[0]) + '</option>'; }).join('') + '</select>');
+        else if (Array.isArray(ty)) html += fld(lab, '<select id="' + id + '">' + opt(ty, pv || '') + '</select>');
+        else html += fld(lab, '<input type="text" id="' + id + '" value="' + esc(pv || '') + '">');
       });
       html += fld(spec.obs || 'Observación', '<textarea id="ev_obs"></textarea>');
       html += fld('Oficial', '<select id="ev_oficial">' + opt([['No', 'Borrador'], ['Sí', 'Oficial']], 'No') + '</select>');
@@ -638,7 +637,7 @@
             (gas ? '' : '<button class="dact" data-act="cfg-guardar">Guardar configuración</button><button class="dact" data-act="cfg-probar">Probar conexión</button>') +
             '<button class="dact primary" data-act="cfg-push">Guardar ahora</button><button class="dact" data-act="cfg-pull">Traer datos</button>' +
           '</div>' +
-          '<div class="sec-empty">La regeneración de las hojas legibles del libro llegará en una fase próxima; por ahora se guarda y sincroniza el estado completo.</div></div>' +
+          '<div class="sec-empty">Al guardar se sincroniza el estado y se regeneran las hojas legibles del libro (Inventario, Pendientes, Bitácora, Registro…).</div></div>' +
         '<div class="sec"><div class="sec-h">Respaldo JSON</div><div class="dacts"><button class="dact" data-act="cfg-export">Exportar copia</button><button class="dact" data-act="cfg-import">Importar copia</button></div></div>' +
         '<div class="sec"><div class="sec-h">Mantenimiento de datos</div><div class="dacts">' +
           '<button class="dact" data-act="cfg-ofic">Oficializar borradores</button>' +
@@ -660,7 +659,7 @@
       var saveCfg = function () { if (!gas) Cloud.set(el('#cfgUrl').value, el('#cfgTok').value, el('#cfgAuto').checked); else localStorage.setItem('sigem_gs_auto', el('#cfgAuto').checked ? '1' : '0'); };
       if (act === 'cfg-guardar') { saveCfg(); toast('Configuración guardada'); refreshCloudChip(); setCfgStatus(); return; }
       if (act === 'cfg-probar') { setCfgStatus('Probando…'); Cloud.test().then(function () { setCfgStatus('Conexión correcta ✓'); }).catch(function (e) { setCfgStatus('Error: ' + e.message); }); return; }
-      if (act === 'cfg-push') { saveCfg(); setCfgStatus('Guardando…'); Cloud.push().then(function () { setCfgStatus(); toast('Guardado en Google Sheets'); refreshCloudChip(); }).catch(function (e) { setCfgStatus('Error: ' + e.message); toast('Google Sheets: ' + e.message, 'warn'); }); return; }
+      if (act === 'cfg-push') { saveCfg(); setCfgStatus('Guardando…'); Cloud.push().then(function (r) { setCfgStatus(); toast('Guardado en Google Sheets · ' + ((r && r.hojas) || 0) + ' hojas'); refreshCloudChip(); }).catch(function (e) { setCfgStatus('Error: ' + e.message); toast('Google Sheets: ' + e.message, 'warn'); }); return; }
       if (act === 'cfg-pull') { saveCfg(); if (!window.confirm('¿Traer datos del Google Sheet y reemplazar el estado local?')) return; setCfgStatus('Trayendo…'); Cloud.pull().then(function (r) { toast(r && r.empty ? 'El Sheet está vacío' : 'Datos traídos del Sheet'); closeDrawer(); render(); refreshCloudChip(); }).catch(function (e) { setCfgStatus('Error: ' + e.message); }); return; }
       if (act === 'cfg-export') { el('#expBtn').click(); return; }
       if (act === 'cfg-import') { el('#impBtn').click(); return; }
@@ -760,6 +759,53 @@
     document.body.appendChild(inp); inp.click();
   }
 
+  /* ----- hojas legibles del libro (Inventario, Pendientes, Bitácora, Registro…) ----- */
+  // Portado de la app clásica: se envían en cada push para regenerar el Google Sheet.
+  function cuadernoSheets() {
+    var S = H.getState(), hoy = H.hoyLocal();
+    var estLbl = function (e) { return ESTADO_LABEL[e] || e; };
+    var fF = function (v) { var s = H.fmtFecha(v); return s === '—' ? '' : s; };
+    var eqNom = function (inv) { return (H.findEquipo(inv) || {}).equipo || ''; };
+    var eqSrv = function (inv) { return (H.findEquipo(inv) || {}).servicio || ''; };
+    var sheets = [];
+    var pendVivos = (S.pendientes || []).filter(function (p) { return !p.anulado; });
+    var pendById = {}; pendVivos.forEach(function (p) { pendById[p.id] = p; });
+    sheets.push({ name: 'Inicio', hidden: false, headerRow: 0, rows: [
+      ['Gestión Equipos Críticos HHHA · Datos sincronizados desde la aplicación'], ['Actualizado', hoy], [],
+      ['Hojas de datos: Inventario · Pendientes · Tareas · Tareas-Pendientes · Bitácora · Registro (por fecha/hora de creación) · Equipos en servicio técnico · Equipos no operativos · Contactos.'],
+      ['ID_EQUIPO es un correlativo estable de Inventario. La unión entre hojas se hace por "N° Inv." (= "N° Inventario").'],
+      ['Las hojas de sistema (empiezan con "_") están ocultas: guardan el estado. No las borres ni edites.'], [],
+      ['LEYENDA · RESULTADO MP'], ['Si', 'MP realizada']
+    ].concat(Object.keys(CAUSALES).map(function (k) { return [k, CAUSALES[k].desc]; }))
+      .concat([['FS', 'Fuera de servicio'], ['NU', 'No ubicado'], ['Baja', 'Dado de baja'], ['No', 'No realizada'], [], ['LEYENDA · ESTADOS']])
+      .concat(['operativo', 'no_operativo', 'en_servicio_tecnico', 'baja', 'desconocido'].map(function (e) { return [estLbl(e), e]; })) });
+    sheets.push({ name: 'Inventario', hidden: false, rows: [
+      ['ID_EQUIPO', 'N° Carpeta', 'N° Inventario', 'Equipo', 'Servicio', 'Unidad', 'Ubicación', 'Procedencia', 'Marca', 'Modelo', 'Serie', 'Año Instalación', 'Vida Útil Residual', 'Clasificación', 'ENU / Baja']
+    ].concat(S.equipos.map(function (e) { return [e.id, e.carpeta || '', e.inv, e.equipo || '', e.servicio || '', e.unidad || '', e.ubic || '', e.proc || '', e.marca || '', e.modelo || '', e.serie || '', e.ano || '', e.vur || '', e.clasif || '', e.estado === 'baja' ? 'Baja' : 'En uso']; })) });
+    sheets.push({ name: 'Pendientes', hidden: false, rows: [
+      ['ID_PENDIENTE', 'N° Inv.', 'Equipo', 'Tipo', 'Descripción', 'Responsable', 'Estado', 'Compromiso']
+    ].concat(pendVivos.map(function (p) { return [p.id, p.inv, p.equipo || eqNom(p.inv), TIPO_PEND[p.tipo] || p.tipo, p.desc || '', p.ejecutor || '', PEND_LABEL[p.estado] || p.estado, fF(p.fechaComp)]; })) });
+    var tareasVivas = (S.tareas || []).filter(function (t) { return pendById[t.pendId]; });
+    sheets.push({ name: 'Tareas', hidden: false, rows: [
+      ['ID_Tareas', 'N° Inv.', 'Equipo', 'Tipo', 'Descripción', 'Responsable', 'Estado', 'Compromiso']
+    ].concat(tareasVivas.map(function (t) { var p = pendById[t.pendId] || {}; return [t.id, t.inv, t.equipo || eqNom(t.inv), TIPO_PEND[p.tipo] || p.tipo || '', t.desc || '', p.ejecutor || '', t.estado === 'cerrado' ? 'Hecha' : 'Pendiente', fF(p.fechaComp)]; })) });
+    sheets.push({ name: 'Tareas-Pendientes', hidden: false, rows: [['ID_PENDIENTE', 'ID_TAREAS']].concat(tareasVivas.map(function (t) { return [t.pendId, t.id]; })) });
+    sheets.push({ name: 'Bitácora', hidden: false, rows: [
+      ['ID_BITACORA', 'Fecha del evento', 'Fecha registro', 'N° Inv.', 'Equipo', 'Servicio', 'Tipo', 'Resultado', 'Estado equipo', 'Ejecutor', 'N° Informe Folio Solicitud de trabajo', 'N° Envío', 'N° OC', 'N° Cotización', 'Empresa', 'Técnico', 'Observación', 'Oficial']
+    ].concat(S.eventos.filter(function (e) { return !e.anulado; }).slice().sort(function (a, b) { return (b.fecha || '').localeCompare(a.fecha || '') || (b.id - a.id); }).map(function (e) { return [e.id, fF(e.fecha), fF(e.fechaReg), e.inv, e.equipo || eqNom(e.inv), e.servicio || eqSrv(e.inv), H.etiquetaTipoEvento(e), e.resultado || '', e.estado || '', e.ejecutor || '', e.folio || '', e.nEnvio || '', e.nOC || '', e.nCotiz || '', e.empresa || '', e.tecnico || '', e.obs || '', e.oficial || 'No']; })) });
+    var tsKey = function (e) { return e.ts || (e.fechaReg ? e.fechaReg + 'T00:00:00' : (e.fecha ? e.fecha + 'T00:00:00' : '')); };
+    var creado = function (e) { if (e.ts) { var d = new Date(e.ts); if (!isNaN(d)) return d.toLocaleString('es-CL'); } return fF(e.fechaReg) || fF(e.fecha) || ''; };
+    sheets.push({ name: 'Registro', hidden: false, rows: [
+      ['Creado', 'ID_BITACORA', 'N° Inv.', 'Equipo', 'Tipo', 'Resultado', 'Estado equipo', 'Ejecutor', 'N° Informe / Folio', 'Observación']
+    ].concat(S.eventos.filter(function (e) { return !e.anulado; }).slice().sort(function (a, b) { return tsKey(b).localeCompare(tsKey(a)) || (b.id - a.id); }).map(function (e) { return [creado(e), e.id, e.inv, e.equipo || eqNom(e.inv), H.etiquetaTipoEvento(e), e.resultado || '', e.estado || '', e.ejecutor || '', e.folio || '', e.obs || '']; })) });
+    var colsEstado = ['N° Inv.', 'Equipo', 'Servicio', 'Unidad', 'Ubicación', 'Marca', 'Modelo', 'Días en estado', 'Desde', 'Última gestión', 'Días s/gestión', 'Detalle gestión', 'Encargado', 'Pend. abiertos', 'N° Informe / Folio', 'Apertura ciclo'];
+    var filasEstado = function (est) { return S.equipos.filter(function (e) { return e.estado === est; }).map(function (e) { var ciclo = H.ciclosAbiertosDe(e.inv)[0]; var g = H.ultimaGestion(e.inv); return [e.inv, e.equipo || '', e.servicio || '', e.unidad || '', e.ubic || '', e.marca || '', e.modelo || '', H.diasEnEstado(e), fF(e.estadoDesde), g ? fF(g.fecha) : '', g ? H.diasEntreFechas(g.fecha, hoy) : '', g ? g.texto : '', H.encargadoDe(e) || '', H.pendientesDe(e.inv).filter(function (p) { return p.estado !== 'cerrado'; }).length, ciclo ? (ciclo.folio || '') : '', ciclo ? fF(ciclo.fechaApertura) : '']; }); };
+    sheets.push({ name: 'Equipos en servicio técnico', hidden: false, rows: [colsEstado].concat(filasEstado('en_servicio_tecnico')) });
+    sheets.push({ name: 'Equipos no operativos', hidden: false, rows: [colsEstado].concat(filasEstado('no_operativo')) });
+    if (H.getContactos) sheets.push({ name: 'Contactos', hidden: false, rows: [['Servicio', 'Cargo', 'Nombre', 'Apellido', 'Anexo', 'Correo electrónico']].concat(H.getContactos().map(function (c) { return [c.servicio || '(todos)', c.cargo || '', c.nombre || '', c.apellido || '', c.anexo || '', c.correo || '']; })) });
+    return sheets;
+  }
+
   /* ------------------- pantallas (Más ▾): Tablero / Cumplimiento -------------------- */
   function closeMore() { var m = el('#moreMenu'); if (m) m.classList.remove('on'); }
   function showScreen(name) {
@@ -771,45 +817,73 @@
     else { g.style.display = 'none'; alt.style.display = ''; if (tbar) tbar.style.display = 'none'; if (name === 'tablero') renderTablero(); else renderCumplimiento(); }
   }
 
-  // ---- Tablero (kanban): columnas con clic para abrir la ficha / avanzar pendientes ----
+  // ---- Tablero (kanban): arrastrar tarjetas entre columnas (o clic para abrir) ----
   var TBC = { no_operativo: '--alert', en_servicio_tecnico: '--warn', operativo: '--op' };
-  function kbCol(label, colorVar, n, cardsHtml) { return '<div class="kb-col"><div class="kb-col-h" style="border-left-color:var(' + colorVar + ')">' + esc(label) + '<span class="n">' + n + '</span></div>' + (cardsHtml || '<div class="kb-more">—</div>') + '</div>'; }
+  var tbFilter = { q: '', servicio: '', verOp: false };
+  var dragData = null;
+  function uniqueServicios() { var s = {}; eqs().forEach(function (e) { if (e.servicio) s[e.servicio] = 1; }); return Object.keys(s).sort(function (a, b) { return a.localeCompare(b, 'es'); }); }
+  function kbCol(label, colorVar, n, cardsHtml, dataCol) { return '<div class="kb-col" data-col="' + esc(dataCol == null ? '' : dataCol) + '"><div class="kb-col-h" style="border-left-color:var(' + colorVar + ')">' + esc(label) + '<span class="n">' + n + '</span></div>' + (cardsHtml || '<div class="kb-more">—</div>') + '</div>'; }
   function renderTablero() {
     var alt = el('#altScreen');
+    var fb = tbMode === 'estado'
+      ? '<div class="filterbar2"><input type="search" id="tbQ" placeholder="Buscar inv, equipo, servicio…" value="' + esc(tbFilter.q) + '"><select class="sel" id="tbSrv"><option value="">Todos los servicios</option>' + uniqueServicios().map(function (s) { return '<option' + (s === tbFilter.servicio ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select><label class="tb-chk"><input type="checkbox" id="tbVerOp"' + (tbFilter.verOp ? ' checked' : '') + '> Ver operativos</label><span class="tb-hint">↔ arrastra una tarjeta a otra columna para registrar el cambio</span></div>'
+      : '<div class="filterbar2"><span class="tb-hint">↔ arrastra entre columnas' + (tbMode === 'pendientes' ? ' para cambiar el estado del pendiente' : ' para registrar el evento de esa etapa') + '</span></div>';
     alt.innerHTML = '<div class="scr-hd"><h2>Tablero</h2><div class="seg2" id="tbSeg">' +
       [['estado', 'Por estado'], ['pendientes', 'Pendientes'], ['correctivos', 'Correctivos']].map(function (o) { return '<button data-m="' + o[0] + '"' + (tbMode === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') +
-      '</div></div><div id="tbBoard"></div>';
+      '</div></div>' + fb + '<div id="tbBoard"></div>';
     el('#tbSeg').onclick = function (e) { var b = e.target.closest('button[data-m]'); if (!b) return; tbMode = b.getAttribute('data-m'); renderTablero(); };
-    var board = el('#tbBoard');
+    if (tbMode === 'estado') {
+      el('#tbQ').oninput = function (e) { tbFilter.q = e.target.value.toLowerCase(); repaintTbBoard(); };
+      el('#tbSrv').onchange = function (e) { tbFilter.servicio = e.target.value; repaintTbBoard(); };
+      el('#tbVerOp').onchange = function (e) { tbFilter.verOp = e.target.checked; repaintTbBoard(); };
+    }
+    repaintTbBoard();
+  }
+  function repaintTbBoard() {
+    var board = el('#tbBoard'); if (!board) return;
     board.innerHTML = tbMode === 'pendientes' ? boardPendientes() : tbMode === 'correctivos' ? boardCorrectivos() : boardEstado();
     board.onclick = function (e) {
-      var pa = e.target.closest('[data-pend]');
-      if (pa) { e.stopPropagation(); var p = findPend(pa.getAttribute('data-pend')); if (!p) return; var a = pa.getAttribute('data-do'); if (a === 'avanzar') H.cambiarEstadoPend(p, p.estado === 'no_iniciado' ? 'en_proceso' : 'cerrado'); else if (a === 'cerrar') H.cerrarPendiente(p, ''); else if (a === 'reabrir') H.cambiarEstadoPend(p, 'en_proceso'); renderTablero(); return; }
+      var pa = e.target.closest('[data-do]');
+      if (pa) { e.stopPropagation(); var p = findPend(pa.getAttribute('data-pend')); if (!p) return; var a = pa.getAttribute('data-do'); if (a === 'avanzar') H.cambiarEstadoPend(p, p.estado === 'no_iniciado' ? 'en_proceso' : 'cerrado'); else if (a === 'cerrar') H.cerrarPendiente(p, ''); else if (a === 'reabrir') H.cambiarEstadoPend(p, 'en_proceso'); repaintTbBoard(); return; }
       var card = e.target.closest('[data-inv]'); if (card) { var eq = H.findEquipo(card.getAttribute('data-inv')); if (eq) paintEquipo(eq); }
     };
+    board.ondragstart = function (e) { var c = e.target.closest('.kb-card'); if (!c) return; dragData = { inv: c.getAttribute('data-inv'), pend: c.getAttribute('data-pend') }; if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragData.inv || dragData.pend || 'x'); } catch (_) {} } c.classList.add('dragging'); };
+    board.ondragend = function (e) { var c = e.target.closest('.kb-card'); if (c) c.classList.remove('dragging'); clearDragOver(board); };
+    board.ondragover = function (e) { if (e.target.closest('.kb-col')) e.preventDefault(); };
+    board.ondragenter = function (e) { var col = e.target.closest('.kb-col'); if (!col) return; clearDragOver(board); col.classList.add('drag-over'); };
+    board.ondrop = function (e) { var col = e.target.closest('.kb-col'); if (!col || !dragData) return; e.preventDefault(); handleDrop(col.getAttribute('data-col')); clearDragOver(board); dragData = null; };
+  }
+  function clearDragOver(board) { var cs = board.querySelectorAll('.kb-col.drag-over'); for (var i = 0; i < cs.length; i++) cs[i].classList.remove('drag-over'); }
+  function handleDrop(target) {
+    if (!target) return;
+    if (tbMode === 'pendientes') { var p = findPend(dragData.pend); if (!p || p.estado === target) return; if (target === 'cerrado') H.cerrarPendiente(p, ''); else H.cambiarEstadoPend(p, target); repaintTbBoard(); return; }
+    var eq = H.findEquipo(dragData.inv); if (!eq) return;
+    if (tbMode === 'correctivos') { paintEvento(eq, { tipo: target }); return; }
+    if (eq.estado === target) return;
+    if (target === 'operativo' && H.ciclosAbiertosDe(eq.inv).length === 0) paintEvento(eq, { tipo: 'Visita técnica', preset: { tipoVisita: 'correctiva', estado: 'operativo' } });
+    else paintEvento(eq, { tipo: target === 'no_operativo' ? 'Solicitud de trabajo' : target === 'en_servicio_tecnico' ? 'Envío a servicio técnico' : 'Reparación', preset: target === 'operativo' ? { estado: 'operativo' } : {} });
   }
   function boardEstado() {
-    var S = H.getState(), CAP = 60, cols = [['no_operativo', 'No operativo'], ['en_servicio_tecnico', 'En servicio técnico'], ['operativo', 'Operativo']];
+    var S = H.getState(), CAP = 80, cols = [['no_operativo', 'No operativo'], ['en_servicio_tecnico', 'En servicio técnico'], ['operativo', 'Operativo']];
+    var match = function (e) { return (!tbFilter.servicio || e.servicio === tbFilter.servicio) && (!tbFilter.q || ((e.inv || '') + ' ' + (e.equipo || '') + ' ' + (e.servicio || '')).toLowerCase().indexOf(tbFilter.q) >= 0); };
     return '<div class="kb-board">' + cols.map(function (col) {
-      var list = S.equipos.filter(function (e) { return e.estado === col[0]; });
+      if (col[0] === 'operativo' && !tbFilter.verOp) return kbCol(col[1], TBC[col[0]], '·', '<div class="kb-more">activa "Ver operativos"</div>', col[0]);
+      var list = S.equipos.filter(function (e) { return e.estado === col[0] && match(e); });
       if (col[0] !== 'operativo') list.sort(function (a, b) { return H.diasEnEstado(b) - H.diasEnEstado(a); });
-      var cards = list.slice(0, CAP).map(function (e) {
-        var enc = H.encargadoDe(e);
-        return '<div class="kb-card" data-inv="' + esc(e.inv) + '" style="border-left-color:var(' + TBC[col[0]] + ')"><div class="kb-inv">' + esc(e.inv) + '</div><div class="kb-eq">' + esc(e.equipo || '—') + '</div><div class="kb-meta"><span>' + esc(e.servicio || '—') + '</span>' + (col[0] !== 'operativo' ? '<span><b>' + H.diasEnEstado(e) + '</b> d</span>' : '') + (enc ? '<span>' + esc(enc) + '</span>' : '') + '</div></div>';
-      }).join('');
-      return kbCol(col[1], TBC[col[0]], list.length, cards + (list.length > CAP ? '<div class="kb-more">+' + (list.length - CAP) + ' más · filtra en la Gantt</div>' : ''));
+      var cards = list.slice(0, CAP).map(function (e) { var enc = H.encargadoDe(e); return '<div class="kb-card" draggable="true" data-inv="' + esc(e.inv) + '" style="border-left-color:var(' + TBC[col[0]] + ')"><div class="kb-inv">' + esc(e.inv) + '</div><div class="kb-eq">' + esc(e.equipo || '—') + '</div><div class="kb-meta"><span>' + esc(e.servicio || '—') + '</span>' + (col[0] !== 'operativo' ? '<span><b>' + H.diasEnEstado(e) + '</b> d</span>' : '') + (enc ? '<span>' + esc(enc) + '</span>' : '') + '</div></div>'; }).join('');
+      return kbCol(col[1], TBC[col[0]], list.length, cards + (list.length > CAP ? '<div class="kb-more">+' + (list.length - CAP) + ' más · filtra</div>' : ''), col[0]);
     }).join('') + '</div>';
   }
   function boardPendientes() {
     var S = H.getState(), cols = [['no_iniciado', 'No iniciado', '--alert'], ['en_proceso', 'En proceso', '--warn'], ['cerrado', 'Resuelto', '--op']];
     return '<div class="kb-board">' + cols.map(function (col) {
       var list = (S.pendientes || []).filter(function (p) { return !p.anulado && p.estado === col[0]; });
-      var cards = list.slice(0, 60).map(function (p) {
+      var cards = list.slice(0, 80).map(function (p) {
         var acts = col[0] === 'cerrado' ? '<button class="mini" data-pend="' + p.id + '" data-do="reabrir">Reabrir</button>'
           : '<button class="mini" data-pend="' + p.id + '" data-do="avanzar">' + (p.estado === 'no_iniciado' ? 'Iniciar' : 'Avanzar') + '</button><button class="mini" data-pend="' + p.id + '" data-do="cerrar">Resolver</button>';
-        return '<div class="kb-card" data-inv="' + esc(p.inv) + '" style="border-left-color:var(' + col[2] + ')"><div class="kb-inv">' + esc(p.inv) + ' · ' + esc(TIPO_PEND[p.tipo] || p.tipo) + '</div><div class="kb-eq" style="font-size:12px">' + esc(p.desc || '') + '</div><div class="kb-meta">' + (p.ejecutor ? '<span>' + esc(p.ejecutor) + '</span>' : '<span style="color:var(--faint)">sin asignar</span>') + '</div><div class="kb-acts">' + acts + '</div></div>';
+        return '<div class="kb-card" draggable="true" data-inv="' + esc(p.inv) + '" data-pend="' + p.id + '" style="border-left-color:var(' + col[2] + ')"><div class="kb-inv">' + esc(p.inv) + ' · ' + esc(TIPO_PEND[p.tipo] || p.tipo) + '</div><div class="kb-eq" style="font-size:12px">' + esc(p.desc || '') + '</div><div class="kb-meta">' + (p.ejecutor ? '<span>' + esc(p.ejecutor) + '</span>' : '<span style="color:var(--faint)">sin asignar</span>') + '</div><div class="kb-acts">' + acts + '</div></div>';
       }).join('');
-      return kbCol(col[1], col[2], list.length, cards);
+      return kbCol(col[1], col[2], list.length, cards, col[0]);
     }).join('') + '</div>';
   }
   function boardCorrectivos() {
@@ -818,8 +892,8 @@
     function etapa(inv) { var evs = H.eventosDe(inv).filter(function (e) { return !e.anulado && stages.indexOf(e.tipo) >= 0; }); if (!evs.length) return stages[0]; evs.sort(function (a, b) { return (a.fecha || '').localeCompare(b.fecha || '') || (a.id - b.id); }); return evs[evs.length - 1].tipo; }
     return '<div class="kb-board" style="grid-template-columns:repeat(' + stages.length + ',minmax(120px,1fr))">' + stages.map(function (st) {
       var list = abiertos.filter(function (c) { return etapa(c.inv) === st; });
-      var cards = list.map(function (c) { var e = H.findEquipo(c.inv) || {}; return '<div class="kb-card" data-inv="' + esc(c.inv) + '" style="border-left-color:var(--accent)"><div class="kb-inv">' + esc(c.folio || '#' + c.id) + '</div><div class="kb-eq">' + esc(e.equipo || c.inv) + '</div><div class="kb-meta"><span>' + esc(c.inv) + '</span>' + (c.ingenieroAsignado ? '<span>' + esc(c.ingenieroAsignado) + '</span>' : '') + '</div></div>'; }).join('');
-      return kbCol(st, '--accent', list.length, cards);
+      var cards = list.map(function (c) { var e = H.findEquipo(c.inv) || {}; return '<div class="kb-card" draggable="true" data-inv="' + esc(c.inv) + '" style="border-left-color:var(--accent)"><div class="kb-inv">' + esc(c.folio || '#' + c.id) + '</div><div class="kb-eq">' + esc(e.equipo || c.inv) + '</div><div class="kb-meta"><span>' + esc(c.inv) + '</span>' + (c.ingenieroAsignado ? '<span>' + esc(c.ingenieroAsignado) + '</span>' : '') + '</div></div>'; }).join('');
+      return kbCol(st, '--accent', list.length, cards, st);
     }).join('') + '</div>';
   }
 

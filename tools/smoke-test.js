@@ -28,6 +28,7 @@ w.addEventListener('error', e => errs.push(e.message || String(e.error)));
 const checks = [];
 const ok = (label, cond) => checks.push({ label, cond: !!cond });
 const click = node => node && node.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+const fire = (node, type) => node && node.dispatchEvent(new w.Event(type, { bubbles: true, cancelable: true }));
 
 setTimeout(() => {
   try {
@@ -91,6 +92,8 @@ setTimeout(() => {
     ok('Tablero: 3 columnas kanban', d.querySelectorAll('#altScreen .kb-col').length === 3);
     click([...d.querySelectorAll('#tbSeg button')].find(b => b.getAttribute('data-m') === 'pendientes'));
     ok('Tablero pendientes (3 columnas)', d.querySelectorAll('#altScreen .kb-col').length === 3);
+    var pc = d.querySelector('#altScreen .kb-col[data-col="no_iniciado"] .kb-card[data-pend]');
+    if (pc) { var pid = pc.getAttribute('data-pend'); fire(pc, 'dragstart'); fire(d.querySelector('#altScreen .kb-col[data-col="en_proceso"]'), 'drop'); ok('Tablero: arrastrar pendiente cambia estado', (w.HHHA.getState().pendientes.find(p => String(p.id) === pid) || {}).estado === 'en_proceso'); }
     click(d.querySelector('#moreBtn')); click(d.querySelector('.more-item[data-screen="cumplimiento"]'));
     ok('Cumplimiento: tabla por servicio', !!d.querySelector('#altScreen table.cmp-table') && d.querySelectorAll('#altScreen .cmp-table tbody tr').length > 0);
     ok('Cumplimiento: tendencia 12 meses', d.querySelectorAll('#altScreen .trend .trend-col').length === 12);
