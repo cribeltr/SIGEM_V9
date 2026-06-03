@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 /****************************************************************************
- * SIGEM · Build de archivo único (autocontenible, offline).
+ * SIGEM · Build principal (archivo único, autocontenible, offline).
  * --------------------------------------------------------------------------
- * Ensambla los módulos editables del repo en UN solo HTML, inline:
+ * Interfaz PRINCIPAL = "Carta Gantt MP" sobre el núcleo real. Ensambla:
  *
- *   ui/styles.css · ui/vendor/lz-string.min.js · src/seed-data.js
- *   src/hhha-core.js · ui/vendor/xlsx.full.min.js · ui/app.js
+ *   ui/gantt.css · ui/vendor/lz-string.min.js · src/seed-data.js
+ *   src/hhha-core.js · ui/vendor/xlsx.full.min.js · ui/gantt-app.js
  *
- * La FUENTE editable vive en esos archivos; el HTML resultante es derivado.
- * Se escriben DOS copias idénticas (para que nunca se desincronicen):
- *
+ * Escribe DOS copias idénticas (así nunca se desincronizan):
  *   · app.html                 → abrir directo en el navegador (file://)
- *   · apps-script/Index.html   → pegar en el proyecto de Apps Script (Web App)
+ *   · apps-script/Index.html   → pegar en Apps Script (Web App, doGet sirve Index)
+ *
+ * La fuente editable vive en ui/gantt.css y ui/gantt-app.js; el HTML es derivado.
+ * La app clásica completa se construye aparte con tools/build-clasico.js.
  *
  * Uso:  node tools/build.js     (o)     npm run build
  ****************************************************************************/
@@ -19,25 +20,24 @@
 const fs = require('fs');
 const path = require('path');
 
-// Raíz del repo = carpeta padre de /tools (rutas relativas → reproducible en cualquier clon).
 const ROOT = path.resolve(__dirname, '..');
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
-const css  = read('ui/styles.css');
+const css  = read('ui/gantt.css');
 const lz   = read('ui/vendor/lz-string.min.js');
 const seed = read('src/seed-data.js');
 const core = read('src/hhha-core.js');
 const xlsx = read('ui/vendor/xlsx.full.min.js');
-const app  = read('ui/app.js');
+const app  = read('ui/gantt-app.js');
 
-// Seguridad: ningún fragmento inline puede contener </script> o </style> (rompería el HTML).
+// Seguridad: ningún fragmento inline puede contener </script> o </style>.
 function guard(name, code, tag) {
   if (new RegExp('</\\s*' + tag, 'i').test(code)) {
     throw new Error(`${name} contiene </${tag}> y rompería el HTML inline`);
   }
 }
-guard('styles.css', css, 'style');
-[['lz-string', lz], ['seed-data', seed], ['hhha-core', core], ['xlsx', xlsx], ['app', app]]
+guard('gantt.css', css, 'style');
+[['lz-string', lz], ['seed-data', seed], ['hhha-core', core], ['xlsx', xlsx], ['gantt-app', app]]
   .forEach(([n, c]) => guard(n, c, 'script'));
 
 const html = `<!DOCTYPE html>
@@ -45,23 +45,23 @@ const html = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestión Equipos Críticos HHHA</title>
+<title>SIGEM · Carta Gantt MP</title>
 <!-- =========================================================================
-  SIGEM · build de archivo único (autocontenible, offline).
+  SIGEM · build principal (Carta Gantt MP, autocontenible, offline).
   ARCHIVO GENERADO por tools/build.js — no editar a mano.
   Ensamblado a partir de los módulos del repo (sin reescribir lógica):
-    ui/styles.css · ui/vendor/lz-string.min.js · src/seed-data.js
-    src/hhha-core.js · ui/vendor/xlsx.full.min.js · ui/app.js
-  La fuente editable vive en esos archivos; este HTML es el resultado.
+    ui/gantt.css · ui/vendor/lz-string.min.js · src/seed-data.js
+    src/hhha-core.js · ui/vendor/xlsx.full.min.js · ui/gantt-app.js
 ========================================================================== -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
 ${css}
 </style>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('sigem_theme')||'light')}catch(e){}</script>
 </head>
 <body>
-<div id="root"></div>
-
 <!-- Compresión de persistencia (engine ENV.compressor) -->
 <script>${lz}</script>
 <!-- Datos semilla (window.SEED) -->
@@ -70,7 +70,7 @@ ${css}
 <script>${core}</script>
 <!-- SheetJS: conciliación + export Excel (offline) -->
 <script>${xlsx}</script>
-<!-- Capa de vistas "densa pro" -->
+<!-- Vista Carta Gantt MP (interfaz principal) -->
 <script>${app}</script>
 </body>
 </html>

@@ -5,11 +5,12 @@
   "description": "SIGEM · Gestión de Equipos Biomédicos Críticos — app de archivo único, offline, con almacenamiento opcional en Google Sheets (Apps Script).",
   "scripts": {
     "build": "node tools/build.js",
-    "build:gantt": "node tools/build-gantt.js",
-    "build:all": "node tools/build.js && node tools/build-gantt.js",
+    "build:clasico": "node tools/build-clasico.js",
+    "build:all": "node tools/build.js && node tools/build-clasico.js",
     "test": "node tools/smoke-test.js",
-    "test:gantt": "node tools/smoke-gantt.js",
-    "start": "node tools/build.js && echo \"Abre app.html en el navegador\""
+    "test:clasico": "node tools/smoke-clasico.js",
+    "test:all": "node tools/smoke-test.js && node tools/smoke-clasico.js",
+    "start": "node tools/build.js && echo \"Abre app.html (Carta Gantt MP) en el navegador\""
   },
   "devDependencies": {
     "jsdom": "^24.0.0"

@@ -21,7 +21,64 @@
   }
 
   /* ----------------------------- arranque ------------------------------- */
-  var ready = false;
+  var ready = false, cloudApplying = false, cloudTimer = null;
+
+  /* --------- sincronización con Google Sheets (portado de la app clásica) --------- */
+  function isGAS() { try { return !!(typeof google !== 'undefined' && google.script && google.script.run); } catch (e) { return false; } }
+  function gasCall(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(function (e) { reject(new Error((e && e.message) || String(e))); });
+      r[fn].apply(r, args);
+    });
+  }
+  function chkOk(j) { if (!j || !j.ok) throw new Error((j && j.error) || 'sin ok'); return j; }
+  var Cloud = {
+    get url() { return localStorage.getItem('sigem_gs_url') || ''; },
+    get token() { return localStorage.getItem('sigem_gs_token') || ''; },
+    get gas() { return isGAS(); },
+    get connected() { return isGAS() || !!this.url; },
+    get auto() { return isGAS() ? localStorage.getItem('sigem_gs_auto') !== '0' : localStorage.getItem('sigem_gs_auto') === '1'; },
+    get lastSync() { return localStorage.getItem('sigem_gs_last') || ''; },
+    set: function (url, token, auto) { localStorage.setItem('sigem_gs_url', (url || '').trim()); localStorage.setItem('sigem_gs_token', (token || '').trim()); localStorage.setItem('sigem_gs_auto', auto ? '1' : '0'); },
+    _markSync: function () { localStorage.setItem('sigem_gs_last', new Date().toISOString()); },
+    _getUrl: function () { return this.url + (this.url.indexOf('?') >= 0 ? '&' : '?') + 'api=read&token=' + encodeURIComponent(this.token); },
+    test: function () {
+      if (isGAS()) return gasCall('apiRead').then(chkOk);
+      return fetch(this._getUrl(), { redirect: 'follow' }).then(function (r) { return r.json(); }).then(chkOk);
+    },
+    pull: function () {
+      if (!window.LZString) return Promise.reject(new Error('LZString no disponible'));
+      var self = this;
+      var got = isGAS() ? gasCall('apiRead') : fetch(this._getUrl(), { redirect: 'follow' }).then(function (r) { return r.json(); });
+      return got.then(function (j) {
+        if (!j.ok) throw new Error(j.error || 'respuesta inválida');
+        if (!j.dataB64) return { empty: true };
+        var obj = JSON.parse(window.LZString.decompressFromBase64(j.dataB64));
+        cloudApplying = true;
+        try { var r = H.importarBackup(obj); if (!r.ok) throw new Error(r.error); } finally { cloudApplying = false; }
+        self._markSync();
+        return { ok: true, eventos: (obj.eventos || []).length, equipos: (obj.equipos || []).length };
+      });
+    },
+    push: function () {
+      if (!window.LZString) return Promise.resolve();
+      var self = this, dataB64 = window.LZString.compressToBase64(H.exportarBackupJSON());
+      var done = function (j) { if (j && j.ok === false) throw new Error(j.error || 'error al guardar'); self._markSync(); return { ok: true }; };
+      // Fase 1: se sincroniza el ESTADO (dataB64). Las hojas legibles del libro se
+      // regeneran en una fase próxima; al omitir 'sheets', Code.gs las deja intactas.
+      if (isGAS()) return gasCall('apiSave', { dataB64: dataB64 }).then(done);
+      if (!this.url) return Promise.resolve();
+      return fetch(this.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: this.token, dataB64: dataB64 }), redirect: 'follow' }).then(function (r) { return r.json().catch(function () { return { ok: true }; }); }).then(done);
+    }
+  };
+  function scheduleCloudPush() {
+    if (!Cloud.auto || !Cloud.connected || cloudApplying) return;
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(function () { Cloud.push().then(refreshCloudChip).catch(function (e) { toast('Google Sheets: ' + e.message, 'warn'); }); }, 5000);
+  }
+  function refreshCloudChip() { var b = el('#cfgBtn'); if (b) { b.style.color = Cloud.connected ? 'var(--op)' : ''; b.title = Cloud.connected ? ('Sheets · últ. sync: ' + (Cloud.lastSync ? new Date(Cloud.lastSync).toLocaleString('es-CL') : '—')) : 'Configuración / Google Sheets'; } }
+
   H.setSeed(window.SEED || null);
   H.configure({
     ui: {
@@ -29,7 +86,7 @@
       confirm: function (m) { return window.confirm(m); },
       prompt: function (m, d) { return window.prompt(m, d || ''); },
       alert: function (m) { window.alert(m); },
-      onChange: scheduleRender
+      onChange: function () { scheduleRender(); scheduleCloudPush(); }
     },
     env: { xlsx: window.XLSX || null }
   });
@@ -529,6 +586,7 @@
     try { localStorage.setItem('sigem_theme', dark ? 'light' : 'dark'); } catch (e) {}
   };
   el('#legendBtn').onclick = function () { legend.classList.toggle('on'); };
+  el('#cfgBtn').onclick = function () { paintConfig(); };
   el('#expBtn').onclick = function () {
     var blob = new Blob([H.exportarBackupJSON()], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sigem-backup-' + H.hoyLocal() + '.json'; a.click();
@@ -554,6 +612,54 @@
   scrim.addEventListener('click', closeDrawer);
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { if (drawer.classList.contains('on')) closeDrawer(); legend.classList.remove('on'); } });
 
+  /* --------------------------- Configuración ---------------------------- */
+  function cloudStatusText() { return Cloud.connected ? ('Almacén activo' + (Cloud.gas ? ' (Apps Script)' : '') + (Cloud.lastSync ? ' · última sincronización: ' + new Date(Cloud.lastSync).toLocaleString('es-CL') : ' · sin sincronizar aún')) : 'Sin conectar a Google Sheets (los datos viven en este navegador).'; }
+  function setCfgStatus(msg) { var s = el('#cfgStatus'); if (s) s.textContent = msg || cloudStatusText(); }
+  function paintConfig() {
+    drawerMode = 'config'; curInv = null; clearSel();
+    var gas = isGAS();
+    var sheetSec = gas
+      ? '<div class="notice info">Servido desde Apps Script: la sincronización con tu Google Sheet es automática (sin URL ni token).</div>'
+      : fld('URL de la app web (…/exec)', '<input type="text" id="cfgUrl" value="' + esc(Cloud.url) + '" placeholder="https://script.google.com/macros/s/…/exec">') +
+        fld('Token (opcional)', '<input type="text" id="cfgTok" value="' + esc(Cloud.token) + '" placeholder="si definiste SHARED_TOKEN">');
+    drawer.innerHTML =
+      '<div class="d-head"><button class="d-close" data-x>✕</button><div class="d-fam">SIGEM</div><div class="d-name">Configuración</div><div class="d-mm">Almacenamiento, respaldo y mantenimiento</div></div>' +
+      '<div class="d-body">' +
+        '<div class="sec"><div class="sec-h">Almacenamiento · Google Sheets</div>' +
+          '<div id="cfgStatus" class="notice">' + esc(cloudStatusText()) + '</div>' + sheetSec +
+          '<label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin:8px 0"><input type="checkbox" id="cfgAuto"' + (Cloud.auto ? ' checked' : '') + '> Sincronización automática</label>' +
+          '<div class="dacts">' +
+            (gas ? '' : '<button class="dact" data-act="cfg-guardar">Guardar configuración</button><button class="dact" data-act="cfg-probar">Probar conexión</button>') +
+            '<button class="dact primary" data-act="cfg-push">Guardar ahora</button><button class="dact" data-act="cfg-pull">Traer datos</button>' +
+          '</div>' +
+          '<div class="sec-empty">La regeneración de las hojas legibles del libro llegará en una fase próxima; por ahora se guarda y sincroniza el estado completo.</div></div>' +
+        '<div class="sec"><div class="sec-h">Respaldo JSON</div><div class="dacts"><button class="dact" data-act="cfg-export">Exportar copia</button><button class="dact" data-act="cfg-import">Importar copia</button></div></div>' +
+        '<div class="sec"><div class="sec-h">Mantenimiento de datos</div><div class="dacts">' +
+          '<button class="dact" data-act="cfg-ofic">Oficializar borradores</button>' +
+          '<button class="dact" data-act="cfg-dedup">Quitar MP duplicadas</button>' +
+          '<button class="dact" data-act="cfg-normtipos">Normalizar tipos</button>' +
+          '<button class="dact" data-act="cfg-ciclos">Reconstruir ciclos</button></div></div>' +
+        '<div class="sec"><div class="sec-h">Maestro y plantillas</div><div class="sec-empty">Importar maestro .xlsx, conciliación y plantilla MP: en preparación (Fase 2).</div></div>' +
+      '</div><div class="d-foot"><button class="savebtn" data-x>Cerrar</button></div>';
+    drawer.onclick = function (ev) {
+      var t = ev.target.closest('[data-x],[data-act]'); if (!t) return;
+      if (t.hasAttribute('data-x')) return closeDrawer();
+      var act = t.getAttribute('data-act');
+      var saveCfg = function () { if (!gas) Cloud.set(el('#cfgUrl').value, el('#cfgTok').value, el('#cfgAuto').checked); else localStorage.setItem('sigem_gs_auto', el('#cfgAuto').checked ? '1' : '0'); };
+      if (act === 'cfg-guardar') { saveCfg(); toast('Configuración guardada'); refreshCloudChip(); setCfgStatus(); return; }
+      if (act === 'cfg-probar') { setCfgStatus('Probando…'); Cloud.test().then(function () { setCfgStatus('Conexión correcta ✓'); }).catch(function (e) { setCfgStatus('Error: ' + e.message); }); return; }
+      if (act === 'cfg-push') { saveCfg(); setCfgStatus('Guardando…'); Cloud.push().then(function () { setCfgStatus(); toast('Guardado en Google Sheets'); refreshCloudChip(); }).catch(function (e) { setCfgStatus('Error: ' + e.message); toast('Google Sheets: ' + e.message, 'warn'); }); return; }
+      if (act === 'cfg-pull') { saveCfg(); if (!window.confirm('¿Traer datos del Google Sheet y reemplazar el estado local?')) return; setCfgStatus('Trayendo…'); Cloud.pull().then(function (r) { toast(r && r.empty ? 'El Sheet está vacío' : 'Datos traídos del Sheet'); closeDrawer(); render(); refreshCloudChip(); }).catch(function (e) { setCfgStatus('Error: ' + e.message); }); return; }
+      if (act === 'cfg-export') { el('#expBtn').click(); return; }
+      if (act === 'cfg-import') { el('#impBtn').click(); return; }
+      if (act === 'cfg-ofic') { var n = H.oficializarTodosBorradores(); H.save(); toast((n || 0) + ' borradores oficializados'); return; }
+      if (act === 'cfg-dedup') { if (H.consolidarMPDuplicadas) H.consolidarMPDuplicadas(); H.save(); toast('MP duplicadas consolidadas'); return; }
+      if (act === 'cfg-normtipos') { if (H.normalizarTiposEvento) H.normalizarTiposEvento(); H.save(); toast('Tipos de evento normalizados'); return; }
+      if (act === 'cfg-ciclos') { if (H.reconstruirCiclos) H.reconstruirCiclos(); H.save(); toast('Ciclos reconstruidos'); return; }
+    };
+    openDrawer();
+  }
+
   /* ------------------------------ toast --------------------------------- */
   var tt;
   function toast(msg, cls) { var t = el('#toast'); if (!t) return; t.textContent = msg; t.className = 'toast on' + (cls ? ' ' + cls : ''); clearTimeout(tt); tt = setTimeout(function () { t.classList.remove('on'); }, 2600); }
@@ -563,6 +669,11 @@
   (function () { var cnt = {}; eqs().forEach(function (e) { var f = e.fam || 'Sin familia'; cnt[f] = (cnt[f] || 0) + 1; }); Object.keys(cnt).filter(function (f) { return cnt[f] > 30; }).forEach(function (f) { collapsed[f] = 1; }); })();
   ready = true;
   render();
+  refreshCloudChip();
+  // al abrir: si hay almacén conectado y sincronización automática, traer datos del Sheet
+  if (Cloud.connected && Cloud.auto) {
+    Cloud.pull().then(function (r) { if (r && !r.empty) { render(); toast('Datos sincronizados desde Google Sheets'); } refreshCloudChip(); }).catch(function () {});
+  }
 
   /* --------------------------- markup del shell ------------------------- */
   function skeleton() {
@@ -575,6 +686,7 @@
         '<button class="iconbtn" id="impBtn" title="Importar respaldo (.json)">↑</button>' +
         '<button class="iconbtn" id="expBtn" title="Exportar respaldo (.json)">↓</button>' +
         '<button class="iconbtn" id="legendBtn" title="Leyenda">?</button>' +
+        '<button class="iconbtn" id="cfgBtn" title="Configuración / Google Sheets">⚙</button>' +
         '<button class="iconbtn" id="themeBtn" title="Tema claro/oscuro">◐</button>' +
         '<input type="file" id="impFile" accept="application/json,.json" hidden>' +
       '</div>' +

@@ -12,18 +12,24 @@ SIGEM_V1/
 │   ├── seed-data.js           Dataset semilla (window.SEED) — DATO, no lógica
 │   └── README.md              Detalle del núcleo y mapa de la API HHHA.*
 ├── ui/                      FUENTE · capa de vistas (presentación)
-│   ├── index.html             Shell de desarrollo (orden de carga de módulos)
-│   ├── app.js                 Router, tablas, drawer, command palette, vistas
-│   ├── styles.css             Sistema de diseño (tokens, claro/oscuro, densidad alta)
+│   ├── gantt-app.js           PRINCIPAL · vista Carta Gantt MP sobre el motor real
+│   ├── gantt.css              PRINCIPAL · diseño de la Carta Gantt (claro/oscuro)
+│   ├── gantt.html             Shell de desarrollo de la Carta Gantt
+│   ├── app.js                 CLÁSICO · router, tablas, drawer, vistas (en migración)
+│   ├── styles.css             CLÁSICO · sistema de diseño
+│   ├── index.html             Shell de desarrollo de la app clásica
 │   ├── vendor/                Dependencias vendorizadas (lz-string, SheetJS)
 │   └── README.md              Detalle de la UI, vistas y atajos
 ├── tools/
-│   └── build.js             Ensambla las fuentes en el archivo único (genera los .html)
+│   ├── build.js               Genera app.html + apps-script/Index.html (Carta Gantt MP)
+│   ├── build-clasico.js       Genera app-clasico.html (app clásica completa)
+│   └── smoke-test.js          Smoke headless (jsdom); smoke-clasico.js para la clásica
 ├── apps-script/             DESPLIEGUE · backend opcional en Google Sheets
 │   ├── Code.gs                Web App: guarda el estado y las hojas legibles
-│   └── Index.html             GENERADO — pegar en el proyecto de Apps Script
-├── app.html                 GENERADO — abrir directo en el navegador
-└── package.json             npm run build
+│   └── Index.html             GENERADO (Carta Gantt MP) — pegar en Apps Script
+├── app.html                 GENERADO · interfaz PRINCIPAL (Carta Gantt MP)
+├── app-clasico.html         GENERADO · app clásica completa (en migración)
+└── package.json             npm run build · build:clasico · build:all
 ```
 
 ## Desarrollo
@@ -33,35 +39,47 @@ Edita siempre las **fuentes** en `src/` y `ui/` (nunca los `.html` generados).
 - **Probar rápido:** abre `ui/index.html` en el navegador (`file://`, sin servidor).
   Carga los módulos por separado, ideal para iterar.
 
-## Build
+## Interfaz principal: "Carta Gantt MP" (app.html)
 
-`app.html` y `apps-script/Index.html` son **artefactos generados** que inlinean
-todas las fuentes en un solo HTML autocontenible. Para regenerarlos:
+La interfaz **principal** es la **Carta Gantt MP** sobre el núcleo real
+(`src/hhha-core.js`): la matriz anual de MP por equipo (familia × 12 meses) con
+KPIs, filtros y panel lateral. Usa los datos reales (estado recalculado,
+`prog`/`registro`) y expone las funciones del programa:
 
-```bash
-npm run build      # o: node tools/build.js
-```
-
-El build escribe **las dos copias idénticas** en una sola pasada (así nunca se
-desincronizan) y aborta si algún fragmento contiene `</script>`/`</style>`.
-
-## Interfaz "Carta Gantt MP" (gantt.html)
-
-Presentación alternativa **sobre el mismo motor** (`src/hhha-core.js`): la matriz
-anual de MP por equipo (familia × 12 meses) con KPIs, filtros y panel lateral.
-Usa los datos reales (estado recalculado, `prog`/`registro`) y expone las
-funciones del programa: clic en una celda **registra/corrige la MP** (Si/C1–C8/
-FS/NU/Baja) con recálculo de estado; el panel del equipo da acceso a bitácora
-(oficializar/anular), pendientes, ciclos, baja, encargado, notas y gestión.
+- clic en una celda **registra/corrige la MP** (Si/C1–C8/FS/NU/Baja) con recálculo;
+- el panel del equipo da acceso a bitácora (oficializar/anular/editar), pendientes,
+  ciclos, baja, encargado, notas y gestión, y a **Nuevo evento** con los campos por
+  tipo (Solicitud/Visita/OC/Envío/Recepción/Reparación/MP);
+- **Configuración** (⚙): sincronización con **Google Sheets** (Apps Script y HTTP),
+  respaldo JSON y mantenimiento de datos.
 
 Fuentes editables: `ui/gantt.css` y `ui/gantt-app.js` (dev: `ui/gantt.html`).
-Comparte el `localStorage` con `app.html` (mismo estado).
+
+`app.html` y `apps-script/Index.html` son **artefactos generados** (dos copias
+idénticas) que inlinean todas las fuentes en un HTML autocontenible y offline.
 
 ```bash
-npm run build:gantt   # genera gantt.html (archivo único, offline)
-npm run test:gantt    # smoke test headless (jsdom)
-npm run build:all     # genera app.html + gantt.html
+npm run build         # genera app.html + apps-script/Index.html (Carta Gantt MP)
+npm test              # smoke test headless (jsdom) de app.html
 ```
+
+### App clásica completa (app-clasico.html) — en migración
+
+Mientras se porta todo a la interfaz principal, la **app clásica** completa
+(Tablero, Cumplimiento, conciliación de maestro, etc.) se conserva y comparte el
+mismo estado/`localStorage`. Fuentes: `ui/styles.css` y `ui/app.js` (dev:
+`ui/index.html`).
+
+```bash
+npm run build:clasico # genera app-clasico.html
+npm run test:clasico  # smoke test de app-clasico.html
+npm run build:all     # genera ambas interfaces
+```
+
+> Migración por fases hacia la Gantt: **Fase 1 (hecha)** Configuración +
+> sincronización Google Sheets. **Fase 2** importar maestro `.xlsx` + conciliación
+> + plantilla MP. **Fase 3** Tablero (kanban) y Cumplimiento. Hasta completarlas,
+> esas funciones siguen disponibles en `app-clasico.html`.
 
 ## Despliegue (Google Sheets · opcional)
 
